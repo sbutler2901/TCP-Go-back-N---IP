@@ -38,9 +38,6 @@ int main(int argc, char *argv[])
   // Read/Write stream buffer, the server's host name, and the file's name to read from. 
   char buffer[BUFFER_SIZE], *host_name, *file_name;
 
-  // Max amount of chars able to be read/written to the stream. 
-  //int rwMax = BUFFER_SIZE - 1;
-
   if (argc < 6) {
     fprintf(stderr,"usage: %s hostname port file-name N MSS\n", argv[0]);
     exit(0);

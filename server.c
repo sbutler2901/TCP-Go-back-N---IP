@@ -182,11 +182,9 @@ int main(int argc, char *argv[])
 
   printf("%d, %s, %f\n", portno, file_name, drop_prob);
 
-//  readFile();
-
   // Sets all variables in the serv_addr struct to 0 to prevent "junk" 
-   //    in the variables. "Always pass structures by reference w/ the 
-   //    size of the structure." 
+  // in the variables. "Always pass structures by reference w/ the 
+  // size of the structure." 
   //bzero((char *) &server_addr, sizeof(server_addr));
   memset((char*) &server_addr, 0, sizeof(server_addr));
 
@@ -203,7 +201,7 @@ int main(int argc, char *argv[])
 
   clientLen = sizeof(server_addr);
 
-  //AF_INET is for the IPv4 protocol. SOCK_DGRAM represents a 
+  // AF_INET is for the IPv4 protocol. SOCK_DGRAM represents a 
   // Datagram. 0 uses system default for transportation
   // protocol. In this case will be UDP. 
   sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -217,14 +215,9 @@ int main(int argc, char *argv[])
     error("ERROR on binding");
   } 
 
-  // Has the process now listen for incoming client connections and
-  //     specifies the maximum number of connections allowed. 
-  //listen(sockfd, MAX_NUM_CONNECTIONS);
-
-
   while(1) {
     // Accepts a connection from the client and creates a new socket descriptor
-     //    to handle communication between the server and the client. 
+    // to handle communication between the server and the client. 
     recsize = recvfrom(sockfd, (void*)buffer, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, &clientLen);
     if (recsize < 0) {
       error("ERROR on recvfrom");
