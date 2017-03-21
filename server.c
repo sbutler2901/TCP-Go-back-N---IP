@@ -153,11 +153,8 @@ int main(int argc, char *argv[])
   // Probablity a packet is dropped
   double drop_prob;
 
-  // The file to write to
-  char *file_name;
-
-  // The buffer to store the datagram
-  char buffer[BUFFER_SIZE];
+  // The file to write to and the buffer to store the datagram
+  char *file_name, buffer[BUFFER_SIZE];
 
   // Stores the size of the clients sockaddr_in 
   socklen_t clientLen;
@@ -169,8 +166,6 @@ int main(int argc, char *argv[])
   // etc for the server and its client. 
   struct sockaddr_in server_addr;  
 
-  pid_t childPid;
-
   if (argc < 4) {
     fprintf(stderr,"usage: %s port# file-name probablity\n", argv[0]);
     exit(1);
@@ -179,8 +174,6 @@ int main(int argc, char *argv[])
   portno = atoi(argv[1]);
   file_name = argv[2];
   drop_prob = atof(argv[3]);
-
-  printf("%d, %s, %f\n", portno, file_name, drop_prob);
 
   // Sets all variables in the serv_addr struct to 0 to prevent "junk" 
   // in the variables. "Always pass structures by reference w/ the 
@@ -210,46 +203,35 @@ int main(int argc, char *argv[])
   // Binds the servers local protocol to the socket. Keeps 
   // the socket reserved and open for this specific
   // process. 
-  if (bind(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
+  if ( bind(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0 ) {
     close(sockfd);
     error("ERROR on binding");
   } 
 
-  while(1) {
+  while (1) {
     // Accepts a connection from the client and creates a new socket descriptor
     // to handle communication between the server and the client. 
     recsize = recvfrom(sockfd, (void*)buffer, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, &clientLen);
     if (recsize < 0) {
       error("ERROR on recvfrom");
       exit(1);
+    } else if ( strstr(buffer, "CLOSE") ) {
+      printf("CLOSE was sent: %s\n", buffer);
+      break;
     }
-
     printf("recsize: %d\n", (int)recsize);
-    sleep(1);
+    //sleep(1);
     printf("datagram: %.*s\n", (int)recsize, buffer);
 
-    printf("The client has connected, closing\n");
-    close(sockfd);
-    exit(0);
-  
-    // Creates the child processes for each client connected. 
-    // childPid = fork();
+    memset(buffer, 0, BUFFER_SIZE);
 
-    // if (childPid < 0) {
-    //   perror("Error on fork");
-    //   exit(1);
-    // }
-
-    // if (childPid == 0) {
-    //   //  Client Process 
-    //   close(sockfd);
-    //   serverProcess(newsockfd);
-    //   exit(0);
-    // } else {
-    //   close(newsockfd);
-    // }
-
+    /*if ( verifyChksum() && verifySequence() ) {
+      sendAck();
+      writeFile();
+    }*/
   }
 
+  printf("The client has closed the connection\n");
+  close(sockfd);
   return 0; 
 }

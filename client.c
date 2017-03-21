@@ -14,6 +14,11 @@
 
 #define BUFFER_SIZE 256
 
+
+unsigned long sequenceNumber = 0;
+unsigned short checksum = 0b0000000000000000;
+unsigned short dataFlag = 0b0101010101010101;
+
 // Prints the error message passed. 
 void error(const char *msg)
 {
@@ -21,11 +26,27 @@ void error(const char *msg)
   exit(0);
 }
 
+void sendDatagram(int *sockfd, char *buffer, struct sockaddr_in *server_addr) {
+  char datagram[BUFFER_SIZE];
+
+  snprintf(datagram, BUFFER_SIZE, "%lu%d%d%s", sequenceNumber, checksum, dataFlag, buffer);
+
+  int sendsize = sendto(*sockfd, datagram, strlen(datagram), 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
+  if(sendsize < 0) {
+    error("Error sending the packet:");
+    exit(EXIT_FAILURE);
+  } else {
+    printf("sendsize: %d\n", sendsize);
+  }
+  sequenceNumber++;
+}
+
+
 int main(int argc, char *argv[])
 {
   // The socket file descriptor, port number,
   // and the number of chars read/written
-  int sockfd, portno, rwChars, winSize, maxSegSize, bytes_sent;
+  int sockfd, portno, rwChars, winSize, maxSegSize, sendsize;
 
   // Sockadder_in struct that stores the IP address, 
   // port, and etc of the server.
@@ -48,8 +69,6 @@ int main(int argc, char *argv[])
   file_name = argv[3];
   winSize = atoi(argv[4]);
   maxSegSize = atoi(argv[5]);
-
-  printf("%s, %d, %s, %d, %d\n", host_name, portno, file_name, winSize, maxSegSize);
 
   // AF_INET is for the IPv4 protocol. SOCK_STREAM represents a 
   // Stream Socket. 0 uses system default for transportation
@@ -79,16 +98,18 @@ int main(int argc, char *argv[])
 
   // Copies the server info into the the appropriate socket struct. 
   bcopy((char *) server->h_addr, (char *) &server_addr.sin_addr.s_addr, server->h_length);
-  //memcpy((char *) &server_addr.sin_addr.s_addr, (char *) server->h_addr, server->h_length);
 
   strcpy(buffer, "hello, world!");
 
+  sendDatagram(&sockfd, buffer, &server_addr);
 
-  bytes_sent = sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
-  if(bytes_sent < 0) {
-    error("Error sending the packet:");
-    exit(EXIT_FAILURE);
-  }
+  strcpy(buffer, "Second");
+
+  sendDatagram(&sockfd, buffer, &server_addr);
+
+  strcpy(buffer, "CLOSE");
+
+  sendDatagram(&sockfd, buffer, &server_addr);
 
   /*
   // Establishes the connection between the server and the client. 
