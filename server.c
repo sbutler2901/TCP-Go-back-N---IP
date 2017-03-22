@@ -91,12 +91,6 @@ char *getCapital(char* state) {
 }
 */
 
-// Prints the error message passed. 
-void error(const char *msg)
-{
-  perror(msg);
-  exit(1);
-}
 /*
 // The function that performs the server's function
 //     of returning the capital of a state passed from
@@ -145,6 +139,32 @@ void serverProcess(int newsockfd) {
 }
 */
 
+//unsigned long sequenceNumber = 0;
+unsigned short zeroChksum = 0b0000000000000000;
+unsigned short ackFlag = 0b1010101010101010;
+
+// Prints the error message passed. 
+void error(const char *msg)
+{
+  perror(msg);
+  exit(1);
+}
+
+// void sendAck(int *sockfd, char *buffer, struct sockaddr_in *server_addr, unsigned long sequenceNumber) {
+//   char datagram[BUFFER_SIZE];
+
+//   snprintf(datagram, BUFFER_SIZE, "%lu%d%d", sequenceNumber, zeroChksum, ackFlag);
+
+//   int sendsize = sendto(*sockfd, datagram, strlen(datagram), 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
+//   if(sendsize < 0) {
+//     error("Error sending the packet:");
+//     exit(EXIT_FAILURE);
+//   } else {
+//     printf("sendsize: %d\n", sendsize);
+//   }
+// //  sequenceNumber++;
+// }
+
 int main(int argc, char *argv[])
 {
   // The socket file descriptor & port number
@@ -154,7 +174,8 @@ int main(int argc, char *argv[])
   double drop_prob;
 
   // The file to write to and the buffer to store the datagram
-  char *file_name, buffer[BUFFER_SIZE];
+  char *file_name;
+  u_char buffer[BUFFER_SIZE] = {0};
 
   // Stores the size of the clients sockaddr_in 
   socklen_t clientLen;
@@ -215,13 +236,19 @@ int main(int argc, char *argv[])
     if (recsize < 0) {
       error("ERROR on recvfrom");
       exit(1);
-    } else if ( strstr(buffer, "CLOSE") ) {
+    } /*else if ( strstr(buffer, "CLOSE") ) {
       printf("CLOSE was sent: %s\n", buffer);
       break;
-    }
-    printf("recsize: %d\n", (int)recsize);
-    //sleep(1);
-    printf("datagram: %.*s\n", (int)recsize, buffer);
+    }*/
+
+    uint32_t seqRetrieve = (buffer[0] <<  24) | (buffer[1] << 16) | (buffer[2] << 8) | buffer[3];
+    printf("seqRetrieve: %u\n", seqRetrieve);
+
+    uint32_t chkRetrieve = (buffer[4] << 8) | buffer[5];
+    printf("chkRetrieve: %u\n", chkRetrieve);
+
+    uint32_t dataRetrieve = (buffer[6] << 8) | buffer[7];
+    printf("dataRetrieve: %u\n", dataRetrieve); 
 
     memset(buffer, 0, BUFFER_SIZE);
 

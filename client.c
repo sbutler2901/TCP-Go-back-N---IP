@@ -14,10 +14,10 @@
 
 #define BUFFER_SIZE 256
 
+uint32_t sequenceNumber = 0;
+uint16_t checksum = 0b0000000000000000;
+uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
 
-unsigned long sequenceNumber = 0;
-unsigned short checksum = 0b0000000000000000;
-unsigned short dataFlag = 0b0101010101010101;
 
 // Prints the error message passed. 
 void error(const char *msg)
@@ -26,12 +26,48 @@ void error(const char *msg)
   exit(0);
 }
 
+void makeHeader(u_char *datagram) {
+  datagram[0] = sequenceNumber >> 24;
+  datagram[1] = sequenceNumber >> 16;
+  datagram[2] = sequenceNumber >> 8;
+  datagram[3] = sequenceNumber;
+  datagram[4] = checksum >> 8;
+  datagram[5] = checksum;
+  datagram[6] = dataFlag >> 8;
+  datagram[7] = dataFlag;
+
+
+  uint32_t seqRetrieve = (datagram[0] <<  24) | (datagram[1] << 16) | (datagram[2] << 8) | datagram[3];
+  printf("seqRetrieve: %u\n", seqRetrieve);
+
+  uint32_t chkRetrieve = (datagram[4] << 8) | datagram[5];
+  printf("chkRetrieve: %u\n", chkRetrieve);
+
+  uint32_t dataRetrieve = (datagram[6] << 8) | datagram[7];
+  printf("dataRetrieve: %u\n", dataRetrieve);  
+}
+
 void sendDatagram(int *sockfd, char *buffer, struct sockaddr_in *server_addr) {
-  char datagram[BUFFER_SIZE];
+  // void *datagram = NULL;
+  // datagram = malloc(BUFFER_SIZE);
 
-  snprintf(datagram, BUFFER_SIZE, "%lu%d%d%s", sequenceNumber, checksum, dataFlag, buffer);
+  u_char datagram[BUFFER_SIZE];
 
-  int sendsize = sendto(*sockfd, datagram, strlen(datagram), 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
+  //printf("datagram length: %lu\n", strlen(datagram));
+  //printf("flag: %c, %c, %c, %c\n", datagram[0], datagram[1], datagram[2], datagram[3]);
+
+  //snprintf(datagram, BUFFER_SIZE, "%u%d%d%s", sequenceNumber, checksum, dataFlag, buffer);
+  //snprintf(datagram, BUFFER_SIZE, "%lu%d%d", sequenceNumber, checksum, dataFlag);
+
+  //snprintf(datagram, BUFFER_SIZE, "%u", sequenceNumber);
+
+  //printf("datagram length: %lu\n", strlen(datagram));
+
+  //memcpy(datagram, sequenceNumber, 4);
+
+  makeHeader(datagram);
+
+  int sendsize = sendto(*sockfd, datagram, sizeof(datagram), 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   if(sendsize < 0) {
     error("Error sending the packet:");
     exit(EXIT_FAILURE);
@@ -102,6 +138,20 @@ int main(int argc, char *argv[])
   strcpy(buffer, "hello, world!");
 
   sendDatagram(&sockfd, buffer, &server_addr);
+
+/*
+  recsize = recvfrom(sockfd, (void*)buffer, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, &clientLen);
+  if (recsize < 0) {
+    error("ERROR on recvfrom");
+    exit(1);
+  } else if ( strstr(buffer, "CLOSE") ) {
+    printf("CLOSE was sent: %s\n", buffer);
+    break;
+  }
+  printf("recsize: %d\n", (int)recsize);
+  printf("datagram: %.*s\n", (int)recsize, buffer);
+
+  memset(buffer, 0, BUFFER_SIZE);*/
 
   strcpy(buffer, "Second");
 
