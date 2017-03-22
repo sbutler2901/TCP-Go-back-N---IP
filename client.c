@@ -26,6 +26,31 @@ void error(const char *msg)
   exit(0);
 }
 
+uint32_t calcChecksum(unsigned char *buf, unsigned nbytes, u_int32_t sum)
+{
+  uint i;
+
+  /* Checksum all the pairs of bytes first... */
+  for (i = 0; i < (nbytes & ~1U); i += 2) {
+    sum += (u_int16_t)ntohs(*((u_int16_t *)(buf + i)));
+    if (sum > 0xFFFF)
+      sum -= 0xFFFF;
+  }
+
+  /*
+   * If there's a single byte left over, checksum it, too.
+   * Network byte order is big-endian, so the remaining byte is
+   * the high byte.
+   */
+  if (i < nbytes) {
+    sum += buf[i] << 8;
+    if (sum > 0xFFFF)
+      sum -= 0xFFFF;
+  }
+
+  return (sum);
+}
+
 void makeHeader(u_char *datagram) {
   datagram[0] = sequenceNumber >> 24;
   datagram[1] = sequenceNumber >> 16;
@@ -66,6 +91,13 @@ void sendDatagram(int *sockfd, char *buffer, struct sockaddr_in *server_addr) {
   //memcpy(datagram, sequenceNumber, 4);
 
   makeHeader(datagram);
+
+  memcpy(&datagram[8], "Hell", 4);
+  //strcpy(&datagram[8], "Hello");
+
+  uint32_t tmp0;
+  uint32_t tmp1 = calcChecksum(datagram, BUFFER_SIZE, tmp0);
+  printf("tmp0: %u, tmp1: %u\n", tmp0, tmp1);
 
   int sendsize = sendto(*sockfd, datagram, sizeof(datagram), 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   if(sendsize < 0) {

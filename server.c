@@ -150,6 +150,31 @@ void error(const char *msg)
   exit(1);
 }
 
+uint32_t calcChecksum(unsigned char *buf, unsigned nbytes, u_int32_t sum)
+{
+  uint i;
+
+  /* Checksum all the pairs of bytes first... */
+  for (i = 0; i < (nbytes & ~1U); i += 2) {
+    sum += (u_int16_t)ntohs(*((u_int16_t *)(buf + i)));
+    if (sum > 0xFFFF)
+      sum -= 0xFFFF;
+  }
+
+  /*
+   * If there's a single byte left over, checksum it, too.
+   * Network byte order is big-endian, so the remaining byte is
+   * the high byte.
+   */
+  if (i < nbytes) {
+    sum += buf[i] << 8;
+    if (sum > 0xFFFF)
+      sum -= 0xFFFF;
+  }
+
+  return (sum);
+}
+
 // void sendAck(int *sockfd, char *buffer, struct sockaddr_in *server_addr, unsigned long sequenceNumber) {
 //   char datagram[BUFFER_SIZE];
 
@@ -249,6 +274,10 @@ int main(int argc, char *argv[])
 
     uint32_t dataRetrieve = (buffer[6] << 8) | buffer[7];
     printf("dataRetrieve: %u\n", dataRetrieve); 
+
+    uint32_t tmp0;
+    uint32_t tmp1 = calcChecksum(buffer, BUFFER_SIZE, tmp0);
+    printf("tmp0: %u, tmp1: %u\n", tmp0, tmp1);
 
     memset(buffer, 0, BUFFER_SIZE);
 
