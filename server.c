@@ -14,134 +14,33 @@
 #define MAX_NUM_CONNECTIONS 1
 #define BUFFER_SIZE 256
 
-/*
-FILE *capitalInfo;
-
-// Stores a state w/ it's state. 
-typedef struct {
-  char *state;
-  char *capital;
-} stateCap;
-
-// Stores the 50 stateCap structures. 
-static stateCap dict[50];
-
-// Reads the capitalinfo file storing the states
-// and their capitals. 
-void readFile() {
-  char line [BUFFER_SIZE];
-  int numberRead = 0;
-
-  capitalInfo = fopen("capitalinfo", "r" );
-
-  if(capitalInfo != NULL) {    
-    while(fgets(line, BUFFER_SIZE, capitalInfo) != NULL) {
-
-      // Gets the state & capital from the line. 
-      char *tempState = strtok(line, "-");
-      char *tempCapital = strtok(NULL, "\n");
-
-      // Removes trailing space from the state string. 
-      tempState[strlen(tempState)-1] = 0;
-
-      // Allocates the memory for the string and
-       //    Copies the retrieved string into the struct.  
-      dict[numberRead].state = (char *) malloc(16);
-      strcpy(dict[numberRead].state, tempState);
-  
-      // Removes preceding space. 
-      tempCapital++;
-
-      // Removes trailing newline of capital except for last entry. 
-      if(numberRead < 49) {
-        tempCapital[strlen(tempCapital)-1] = 0;
-      }
-
-      // Allocates the memory for the string and
-      //     Copies the retrieved string into the struct. 
-      dict[numberRead].capital = (char *) malloc(16);
-      strcpy(dict[numberRead].capital, tempCapital);
-
-      numberRead++;
-    }
-
-    //for(int index = 0; index <= 50; index++) {
-    //   printf("state: [%s], capital: [%s]\n", dict[index].state, dict[index].capital);
-    // }
-
-    fclose(capitalInfo);
-  } else {
-    error("ERROR opening the file");
-    exit(1);
-  }
-}
-
-// Returns the name of the state's capital. 
-char *getCapital(char* state) {
-
-  //printf("state = [%s]\n", state);
-  for(int index = 0; index < 50; index++) {
-    //printf("potentialCap = [%s]\n", dict[index].capital);
-    if(strcmp(dict[index].state, state) == 0) {
-      //printf("Capital= [%s]\n", dict[index].capital);
-      return dict[index].capital;
-    }
-  }
-  return "That was not a state\n";
-}
-*/
 
 /*
-// The function that performs the server's function
-//     of returning the capital of a state passed from
-//     it's client. 
-void serverProcess(int newsockfd) {
 
-  // Read/Write stream buffer. 
-  char buffer[BUFFER_SIZE], confirmation[1];
-
-  char *state, *capital, *message;
-
-  // Max amount of chars able to be read/written to the stream
-      and the number read after each read/write. 
-  int rwMax, rwChars;
-
-  rwMax = BUFFER_SIZE - 1;
-
-  while(1){
-
-    // Sets all contents of the buffer to 0. 
-    memset(buffer, 0, BUFFER_SIZE);
-
-    // Reads what the client has sent to the server. 
-    rwChars = read(newsockfd,buffer, rwMax);
-
-    if (rwChars < 0) error("ERROR reading from socket");
-
-    // Terminates when END is received from client. 
-    if(strcmp(buffer, "END") == 0) {
-      printf("Terminating client connection\n");
-      break;
-    }
-
-    state = buffer;
-
-    capital = getCapital(state);
-
-    // Prepares the message to be sent to the client. 
-    sprintf(message, "%s's capital: %s", state, capital);
-
-    // Writes to the client 
-    rwChars = write(newsockfd, message, rwMax);
-
-    if (rwChars < 0) error("ERROR writing to socket");
-  }
-}
-*/
+/**
+ * cpupri_find - find the best (lowest-pri) CPU in the system
+ * @cp: The cpupri context
+ * @p: The task
+ * @lowest_mask: A mask to fill in with selected CPUs (or NULL)
+ *
+ * Note: This function returns the recommended CPUs as calculated during the
+ * current invocation.  By the time the call returns, the CPUs may have in
+ * fact changed priorities any number of times.  While not ideal, it is not
+ * an issue of correctness since the normal rebalancer logic will correct
+ * any discrepancies created by racing against the uncertainty of the current
+ * priority configuration.
+ *
+ * Return: (int)bool - CPUs were found
+int cpupri_find(struct cpupri *cp, struct task_struct *p,
+    struct cpumask *lowest_mask)
+{
+  */
 
 //unsigned long sequenceNumber = 0;
-unsigned short zeroChksum = 0b0000000000000000;
-unsigned short ackFlag = 0b1010101010101010;
+uint16_t pseudoChksum = 0b0000000000000000;
+uint16_t ackFlag = 0b1010101010101010;
+uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
+uint16_t closeFlag = 0b1111111111111111;
 
 // Prints the error message passed. 
 void error(const char *msg)
@@ -150,13 +49,13 @@ void error(const char *msg)
   exit(1);
 }
 
-uint32_t calcChecksum(unsigned char *buf, unsigned nbytes, u_int32_t sum)
+uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
 {
   uint i;
 
-  /* Checksum all the pairs of bytes first... */
+  // Checksum all the pairs of bytes first...
   for (i = 0; i < (nbytes & ~1U); i += 2) {
-    sum += (u_int16_t)ntohs(*((u_int16_t *)(buf + i)));
+    sum += (uint16_t)ntohs(*((uint16_t *)(buf + i)));
     if (sum > 0xFFFF)
       sum -= 0xFFFF;
   }
@@ -175,7 +74,8 @@ uint32_t calcChecksum(unsigned char *buf, unsigned nbytes, u_int32_t sum)
   return (sum);
 }
 
-// void sendAck(int *sockfd, char *buffer, struct sockaddr_in *server_addr, unsigned long sequenceNumber) {
+// void sendAck(int *sockfd, char *buffer, struct sockaddr_in *server_addr, unsigned long sequenceNumber)
+//{
 //   char datagram[BUFFER_SIZE];
 
 //   snprintf(datagram, BUFFER_SIZE, "%lu%d%d", sequenceNumber, zeroChksum, ackFlag);
@@ -192,25 +92,18 @@ uint32_t calcChecksum(unsigned char *buf, unsigned nbytes, u_int32_t sum)
 
 int main(int argc, char *argv[])
 {
-  // The socket file descriptor & port number
-  int sockfd, portno;
+  int sockfd, portno;                         // The socket file descriptor & port number
+  double drop_prob;                           // Probablity a packet is dropped
 
-  // Probablity a packet is dropped
-  double drop_prob;
+  
+  char *file_name;                            // The file to write to and the buffer to store the datagram
+  //u_char buffer[BUFFER_SIZE] = {0};           // Buffer for ACKs
+  u_char recvdDatagram[BUFFER_SIZE] = {0};    // Buffer for receiving datagram
 
-  // The file to write to and the buffer to store the datagram
-  char *file_name;
-  u_char buffer[BUFFER_SIZE] = {0};
+  socklen_t clientLen;                        // Stores the size of the clients sockaddr_in 
+  int recsize;                            // Stores size of received datagram
 
-  // Stores the size of the clients sockaddr_in 
-  socklen_t clientLen;
-
-  // Stores size of received datagram
-  ssize_t recsize;
-
-  // Sockadder_in structs that store IP address, port, and
-  // etc for the server and its client. 
-  struct sockaddr_in server_addr;  
+  struct sockaddr_in server_addr;             // Sockadder_in structs that store IP address, port, and etc for the server and its client. 
 
   if (argc < 4) {
     fprintf(stderr,"usage: %s port# file-name probablity\n", argv[0]);
@@ -227,15 +120,12 @@ int main(int argc, char *argv[])
   //bzero((char *) &server_addr, sizeof(server_addr));
   memset((char*) &server_addr, 0, sizeof(server_addr));
 
-  // Internet Address Family 
-  server_addr.sin_family = AF_INET;
-
-  // Port Number in Network Byte Order 
-  server_addr.sin_port = htons(portno);
+  server_addr.sin_family = AF_INET;            // Internet Address Family 
+  server_addr.sin_port = htons(portno);        // Port Number in Network Byte Order 
 
   // IP Address in Network Byte Order. In this case it is always 
-  //     the address on which the server is running. INADDR_ANY gets 
-   //    this address. 
+  //   the address on which the server is running. INADDR_ANY gets 
+  //   this address. 
   server_addr.sin_addr.s_addr = INADDR_ANY;
 
   clientLen = sizeof(server_addr);
@@ -254,32 +144,44 @@ int main(int argc, char *argv[])
     error("ERROR on binding");
   } 
 
-  while (1) {
+  while (1)
+  {
     // Accepts a connection from the client and creates a new socket descriptor
     // to handle communication between the server and the client. 
-    recsize = recvfrom(sockfd, (void*)buffer, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, &clientLen);
+    recsize = recvfrom(sockfd, (void*)recvdDatagram, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, &clientLen);
     if (recsize < 0) {
       error("ERROR on recvfrom");
       exit(1);
-    } /*else if ( strstr(buffer, "CLOSE") ) {
-      printf("CLOSE was sent: %s\n", buffer);
+    }
+    printf("receivesize: %d\n", recsize);
+
+    for (int i=0; i<20; i++) {
+      printf("pre chck: %u\n", (unsigned int)recvdDatagram[i]);
+    }
+    printf("letter: %c\n", (char)recvdDatagram[8]);
+
+    // Retrieve header
+    uint32_t seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
+    uint16_t chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
+    uint16_t flagRecvd = (recvdDatagram[6] << 8) | recvdDatagram[7];
+    printf("Seq: %u, Chk: %u, Flag: %u\n", seqRecvd, chkRecvd, flagRecvd);
+
+    if (flagRecvd == closeFlag) {
       break;
-    }*/
+    }
 
-    uint32_t seqRetrieve = (buffer[0] <<  24) | (buffer[1] << 16) | (buffer[2] << 8) | buffer[3];
-    printf("seqRetrieve: %u\n", seqRetrieve);
 
-    uint32_t chkRetrieve = (buffer[4] << 8) | buffer[5];
-    printf("chkRetrieve: %u\n", chkRetrieve);
+//    printf("pre chck: %u\n", (unsigned int)recvdDatagram[5]);
+    // Make pseudo header for checksum calculation
+    recvdDatagram[4] = pseudoChksum >> 8;
+    recvdDatagram[5] = pseudoChksum;
+    printf("post chck: %u\n", (unsigned int)recvdDatagram[5]);
 
-    uint32_t dataRetrieve = (buffer[6] << 8) | buffer[7];
-    printf("dataRetrieve: %u\n", dataRetrieve); 
+    uint32_t sum;
+    uint16_t calcdChk = calcChecksum(recvdDatagram, BUFFER_SIZE, sum);
+    printf("Calc'd Chk: %u\n", (unsigned int)calcdChk);
 
-    uint32_t tmp0;
-    uint32_t tmp1 = calcChecksum(buffer, BUFFER_SIZE, tmp0);
-    printf("tmp0: %u, tmp1: %u\n", tmp0, tmp1);
-
-    memset(buffer, 0, BUFFER_SIZE);
+    memset(recvdDatagram, 0, BUFFER_SIZE);
 
     /*if ( verifyChksum() && verifySequence() ) {
       sendAck();

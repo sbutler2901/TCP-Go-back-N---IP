@@ -15,9 +15,9 @@
 #define BUFFER_SIZE 256
 
 uint32_t sequenceNumber = 0;
-uint16_t checksum = 0b0000000000000000;
+uint16_t pseudoChksum = 0b0000000000000000;
 uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
-
+uint16_t closeFlag = 0b1111111111111111;
 
 // Prints the error message passed. 
 void error(const char *msg)
@@ -26,13 +26,13 @@ void error(const char *msg)
   exit(0);
 }
 
-uint32_t calcChecksum(unsigned char *buf, unsigned nbytes, u_int32_t sum)
+uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
 {
   uint i;
 
-  /* Checksum all the pairs of bytes first... */
+  // Checksum all the pairs of bytes first...
   for (i = 0; i < (nbytes & ~1U); i += 2) {
-    sum += (u_int16_t)ntohs(*((u_int16_t *)(buf + i)));
+    sum += (uint16_t)ntohs(*((uint16_t *)(buf + i)));
     if (sum > 0xFFFF)
       sum -= 0xFFFF;
   }
@@ -51,62 +51,83 @@ uint32_t calcChecksum(unsigned char *buf, unsigned nbytes, u_int32_t sum)
   return (sum);
 }
 
-void makeHeader(u_char *datagram) {
-  datagram[0] = sequenceNumber >> 24;
-  datagram[1] = sequenceNumber >> 16;
-  datagram[2] = sequenceNumber >> 8;
-  datagram[3] = sequenceNumber;
-  datagram[4] = checksum >> 8;
-  datagram[5] = checksum;
-  datagram[6] = dataFlag >> 8;
-  datagram[7] = dataFlag;
-
-
-  uint32_t seqRetrieve = (datagram[0] <<  24) | (datagram[1] << 16) | (datagram[2] << 8) | datagram[3];
-  printf("seqRetrieve: %u\n", seqRetrieve);
-
-  uint32_t chkRetrieve = (datagram[4] << 8) | datagram[5];
-  printf("chkRetrieve: %u\n", chkRetrieve);
-
-  uint32_t dataRetrieve = (datagram[6] << 8) | datagram[7];
-  printf("dataRetrieve: %u\n", dataRetrieve);  
+void addData(u_char *sndDatagram, char *buffer)
+{
+	memcpy(&sndDatagram[8], buffer, BUFFER_SIZE - 8);
 }
 
-void sendDatagram(int *sockfd, char *buffer, struct sockaddr_in *server_addr) {
-  // void *datagram = NULL;
-  // datagram = malloc(BUFFER_SIZE);
+// Adds the computed checksum after calculating with the pseudo header
+void addNewChksum(u_char *sndDatagram, uint16_t calcdChk)
+{
+	sndDatagram[4] = calcdChk >> 8;
+  sndDatagram[5] = calcdChk;
+}
 
-  u_char datagram[BUFFER_SIZE];
+// Makes the header for regular data grams
+void makeHeader(u_char *sndDatagram)
+{
 
-  //printf("datagram length: %lu\n", strlen(datagram));
-  //printf("flag: %c, %c, %c, %c\n", datagram[0], datagram[1], datagram[2], datagram[3]);
+  uint32_t sum, seqSend;
+  uint16_t calcdChk, chkSend, dataSend;
 
-  //snprintf(datagram, BUFFER_SIZE, "%u%d%d%s", sequenceNumber, checksum, dataFlag, buffer);
-  //snprintf(datagram, BUFFER_SIZE, "%lu%d%d", sequenceNumber, checksum, dataFlag);
+  sndDatagram[0] = sequenceNumber >> 24;
+  sndDatagram[1] = sequenceNumber >> 16;
+  sndDatagram[2] = sequenceNumber >> 8;
+  sndDatagram[3] = sequenceNumber;
+  sndDatagram[4] = pseudoChksum >> 8;
+  sndDatagram[5] = pseudoChksum;
+  sndDatagram[6] = dataFlag >> 8;
+  sndDatagram[7] = dataFlag;
 
-  //snprintf(datagram, BUFFER_SIZE, "%u", sequenceNumber);
+  calcdChk = calcChecksum(sndDatagram, BUFFER_SIZE, sum);
 
-  //printf("datagram length: %lu\n", strlen(datagram));
+  addNewChksum(sndDatagram, calcdChk);  
 
-  //memcpy(datagram, sequenceNumber, 4);
+  // For testing purposes
+  seqSend = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
+  chkSend = (sndDatagram[4] << 8) | sndDatagram[5];
+  dataSend = (sndDatagram[6] << 8) | sndDatagram[7];
 
-  makeHeader(datagram);
+  printf("Seq: %u, Chk: %u, Flag: %u\n", seqSend, chkSend, dataSend);
+  printf("Calc'd Chk: %u\n", calcdChk);
 
-  memcpy(&datagram[8], "Hell", 4);
-  //strcpy(&datagram[8], "Hello");
+}
 
-  uint32_t tmp0;
-  uint32_t tmp1 = calcChecksum(datagram, BUFFER_SIZE, tmp0);
-  printf("tmp0: %u, tmp1: %u\n", tmp0, tmp1);
+void sendDatagram(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagram)
+{
 
-  int sendsize = sendto(*sockfd, datagram, sizeof(datagram), 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
+  for (int i=0; i<20; i++) {
+    printf("pre chck: %u\n", (unsigned int)sndDatagram[i]);
+  }
+  printf("letter: %c\n", (char)sndDatagram[8]);
+
+  int sendsize = sendto(*sockfd, sndDatagram, sizeof(sndDatagram), 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
+  
   if(sendsize < 0) {
     error("Error sending the packet:");
     exit(EXIT_FAILURE);
   } else {
     printf("sendsize: %d\n", sendsize);
   }
+  memset(sndDatagram, 0, BUFFER_SIZE);
+
   sequenceNumber++;
+}
+
+// Closes the connection to the server
+void closeConnection(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagram)
+{
+	
+  sndDatagram[0] = sequenceNumber >> 24;
+  sndDatagram[1] = sequenceNumber >> 16;
+  sndDatagram[2] = sequenceNumber >> 8;
+  sndDatagram[3] = sequenceNumber;
+  sndDatagram[4] = pseudoChksum >> 8;
+  sndDatagram[5] = pseudoChksum;
+  sndDatagram[6] = closeFlag >> 8;
+  sndDatagram[7] = closeFlag;
+
+  sendDatagram(sockfd, server_addr, sndDatagram);
 }
 
 
@@ -126,6 +147,10 @@ int main(int argc, char *argv[])
 
   // Read/Write stream buffer, the server's host name, and the file's name to read from. 
   char buffer[BUFFER_SIZE], *host_name, *file_name;
+
+	// Buffer for the datagram to be sent
+	u_char sndDatagram[BUFFER_SIZE];  
+
 
   if (argc < 6) {
     fprintf(stderr,"usage: %s hostname port file-name N MSS\n", argv[0]);
@@ -147,14 +172,10 @@ int main(int argc, char *argv[])
   // Sets all variables in the server_addr struct to 0 to prevent "junk" 
   // in the variables. "Always pass structures by reference w/ the 
   // size of the structure." 
-  //bzero((char *) &server_addr, sizeof(server_addr));
   memset((char *) &server_addr, 0, sizeof(server_addr));
 
-  // Internet Address Family 
-  server_addr.sin_family = AF_INET;
-
-  // Port Number in Network Byte Order 
-  server_addr.sin_port = htons(portno);
+  server_addr.sin_family = AF_INET;					// Internet Address Family 
+  server_addr.sin_port = htons(portno);		  // Port Number in Network Byte Order 
 
   // Retrieves the host information based on the address
   // passed from the users commandline. 
@@ -167,72 +188,19 @@ int main(int argc, char *argv[])
   // Copies the server info into the the appropriate socket struct. 
   bcopy((char *) server->h_addr, (char *) &server_addr.sin_addr.s_addr, server->h_length);
 
+  memset(sndDatagram, 0, BUFFER_SIZE);  
+
   strcpy(buffer, "hello, world!");
+  addData(sndDatagram, buffer);
+  makeHeader(sndDatagram);
+	sendDatagram(&sockfd, &server_addr, sndDatagram);
 
-  sendDatagram(&sockfd, buffer, &server_addr);
+  strcpy(buffer, "Second hello");
+  addData(sndDatagram, buffer);
+  makeHeader(sndDatagram);
+  sendDatagram(&sockfd, &server_addr, sndDatagram);
 
-/*
-  recsize = recvfrom(sockfd, (void*)buffer, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, &clientLen);
-  if (recsize < 0) {
-    error("ERROR on recvfrom");
-    exit(1);
-  } else if ( strstr(buffer, "CLOSE") ) {
-    printf("CLOSE was sent: %s\n", buffer);
-    break;
-  }
-  printf("recsize: %d\n", (int)recsize);
-  printf("datagram: %.*s\n", (int)recsize, buffer);
-
-  memset(buffer, 0, BUFFER_SIZE);*/
-
-  strcpy(buffer, "Second");
-
-  sendDatagram(&sockfd, buffer, &server_addr);
-
-  strcpy(buffer, "CLOSE");
-
-  sendDatagram(&sockfd, buffer, &server_addr);
-
-  /*
-  // Establishes the connection between the server and the client. 
-  //if (connect(sockfd,( struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) error("ERROR connecting");
-
-  do {
-    printf("Please enter a state (case sensitive): ");
-
-    //bzero(buffer, BUFFER_SIZE);
-    memset(buffer, 0, BUFFER_SIZE);
-
-    // Gets the state.
-    fgets(buffer, rwMax,stdin);
-    
-    // Removes the newline character from the user's message.  
-    buffer[strlen(buffer)-1] = '\0';
-
-    // Writes the client to the server. 
-    rwChars = write(sockfd,buffer,strlen(buffer));
-    if (rwChars < 0) error("ERROR writing to socket");
-
-    //bzero(buffer, BUFFER_SIZE);
-    memset(buffer, 0, BUFFER_SIZE);
-
-
-    // Reads what the server sent to the client. 
-    rwChars = read(sockfd, buffer, rwMax);
-    if (rwChars < 0) error("ERROR reading from socket");
-
-    printf("%s\n", buffer);
-
-    printf("Would you like to continue? [y]: ");
-
-    fgets(confirmation, 5, stdin);
-
-  } while (confirmation[0] == 'y');
-
-  rwChars = write(sockfd, "END", strlen("END"));
-  // Closes the process's connection to it's sockets. 
-
-  */
+  closeConnection(&sockfd, &server_addr, sndDatagram);
 
   close(sockfd);
 
