@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
     uint16_t flagRecvd = (recvdDatagram[6] << 8) | recvdDatagram[7];
     printf("Seq: %u, Chk: %u, Flag: %u\n", seqRecvd, chkRecvd, flagRecvd);
 
-    printDGram(recvdDatagram, 15);
+    //printDGram(recvdDatagram, 15);
 
     if (flagRecvd == closeFlag) {
       break;

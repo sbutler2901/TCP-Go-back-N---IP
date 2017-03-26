@@ -29,13 +29,13 @@ void error(const char *msg)
   exit(0);
 }
 
-uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
+uint16_t calcChecksum(unsigned nbytes, uint32_t sum)
 {
   uint i;
 
   // Checksum all the pairs of bytes first...
   for (i = 0; i < (nbytes & ~1U); i += 2) {
-    sum += (uint16_t)ntohs(*((uint16_t *)(buf + i)));
+    sum += (uint16_t)ntohs(*((uint16_t *)(sndDatagram + i)));
     if (sum > 0xFFFF)
       sum -= 0xFFFF;
   }
@@ -46,7 +46,7 @@ uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
    * the high byte.
    */
   if (i < nbytes) {
-    sum += buf[i] << 8;
+    sum += sndDatagram[i] << 8;
     if (sum > 0xFFFF)
       sum -= 0xFFFF;
   }
@@ -66,13 +66,13 @@ void printDGram(u_char *dGram, int dGramLen)
   }
 }
 
-void addData(u_char *sndDatagram, char *buffer)
-{
-	memcpy(&sndDatagram[8], buffer, BUFFER_SIZE - 8);
-}
+// void addData(u_char *sndDatagram, char *buffer)
+// {
+// 	memcpy(&sndDatagram[8], buffer, BUFFER_SIZE - 8);
+// }
 
 // Adds the computed checksum after calculating with the pseudo header
-void addNewChksum(u_char *sndDatagram, uint16_t calcdChk)
+void addNewChksum(uint16_t calcdChk)
 {
 	sndDatagram[4] = calcdChk >> 8;
   sndDatagram[5] = calcdChk;
@@ -82,8 +82,8 @@ void addNewChksum(u_char *sndDatagram, uint16_t calcdChk)
 void makeHeader()
 {
 
-  uint32_t sum, seqSend;
-  uint16_t calcdChk, chkSend, dataSend;
+  uint32_t sum=0, seqSend=0;
+  uint16_t calcdChk=0, chkSend=0, dataSend=0;
 
   sndDatagram[0] = sequenceNumber >> 24;
   sndDatagram[1] = sequenceNumber >> 16;
@@ -94,9 +94,13 @@ void makeHeader()
   sndDatagram[6] = dataFlag >> 8;
   sndDatagram[7] = dataFlag;
 
-  calcdChk = calcChecksum(sndDatagram, BUFFER_SIZE, sum);
+  //printDGram(sndDatagram, 15);
 
-  addNewChksum(sndDatagram, calcdChk);  
+  calcdChk = calcChecksum(BUFFER_SIZE, sum);
+
+  printf("Calc'd Chk0: %u\n", calcdChk);
+
+  addNewChksum(calcdChk);  
 
   // For testing purposes
   seqSend = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
@@ -104,16 +108,16 @@ void makeHeader()
   dataSend = (sndDatagram[6] << 8) | sndDatagram[7];
 
   printf("Seq: %u, Chk: %u, Flag: %u\n", seqSend, chkSend, dataSend);
-  printf("Calc'd Chk: %u\n", calcdChk);
+  printf("Calc'd Chk1: %u\n", calcdChk);
 
 }
 
 void sendDatagram(int *sockfd, struct sockaddr_in *server_addr)
 {
 
-  makeHeader();
+  //makeHeader();
 
-  printDGram(sndDatagram, 15);
+  //printDGram(sndDatagram, 15);
 
   int sendsize = sendto(*sockfd, sndDatagram, sizeof(sndDatagram), 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   
@@ -202,20 +206,20 @@ int main(int argc, char *argv[])
   memset(sndDatagram, 0, BUFFER_SIZE);
 
   memcpy(&sndDatagram[8], "Dog", 3);  // Add data
-  //makeHeader(sndDatagram);    
+  makeHeader();    
   sendDatagram(&sockfd, &server_addr);  
 
   memcpy(&sndDatagram[8], "hello, world!", 13);   // Add data
-  //makeHeader(sndDatagram);    
+  makeHeader();    
   sendDatagram(&sockfd, &server_addr);
 
 
   memcpy(&sndDatagram[8], "Dog", 3);  // Add data
-  //makeHeader(sndDatagram);  
+  makeHeader();  
   sendDatagram(&sockfd, &server_addr);
 
   memcpy(&sndDatagram[8], "CLOSE", 5);  // Add data
-  //makeHeader(sndDatagram);  
+  makeHeader();  
   sendDatagram(&sockfd, &server_addr);
 
   //closeConnection(&sockfd, &server_addr);
