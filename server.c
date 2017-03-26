@@ -90,10 +90,15 @@ uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
 // //  sequenceNumber++;
 // }
 
-void printBuffer(u_char *buffer)
+void printDGram(u_char *dGram, int dGramLen)
 {
-  for (int i=0; i<20; i++) {
-    printf("pre chck: %u\n", (unsigned int)buffer[i]);
+  // Prints the header
+  for (int i=0; i<8; i++) {
+    printf("pre chck: %u\n", (unsigned int)dGram[i]);
+  }
+
+  for (int i=8; i<dGramLen; i++) {
+    printf("dGram[%d]: %c\n", i, (char)dGram[i]);
   }
 }
 
@@ -162,10 +167,12 @@ int main(int argc, char *argv[])
     }
     printf("receivesize: %d\n", recsize);
 
-    for (int i=0; i<20; i++) {
+    /*for (int i=0; i<20; i++) {
       printf("pre chck: %u\n", (unsigned int)recvdDatagram[i]);
     }
-    printf("letter: %c\n", (char)recvdDatagram[8]);
+    printf("letter: %c\n", (char)recvdDatagram[8]);*/
+
+    printDGram(recvdDatagram, 15);
 
     //Retrieve header
     uint32_t seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];

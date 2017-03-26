@@ -54,6 +54,18 @@ uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
   return (sum);
 }
 
+void printDGram(u_char *dGram, int dGramLen)
+{
+  // Prints the header
+  for (int i=0; i < dGramLen + 8; i++) {
+    if (i < 8) {
+      printf("dGram[%d]: %u\n", i, (unsigned int)dGram[i]);      
+    } else {
+      printf("dGram[%d]: %c\n", i, (char)dGram[i]);      
+    }
+  }
+}
+
 void addData(u_char *sndDatagram, char *buffer)
 {
 	memcpy(&sndDatagram[8], buffer, BUFFER_SIZE - 8);
@@ -99,12 +111,9 @@ void makeHeader(u_char *sndDatagram)
 void sendDatagram(int *sockfd, struct sockaddr_in *server_addr)
 {
 
-  makeHeader(sndDatagram);    
-  
-  for (int i=0; i<20; i++) {
-    printf("pre chck: %u\n", (unsigned int)sndDatagram[i]);
-  }
-  printf("letter: %c\n", (char)sndDatagram[8]);
+  makeHeader(sndDatagram);
+
+  printDGram(sndDatagram, 15);
 
   int sendsize = sendto(*sockfd, sndDatagram, sizeof(sndDatagram), 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   
