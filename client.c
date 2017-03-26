@@ -19,6 +19,9 @@ uint16_t pseudoChksum = 0b0000000000000000;
 uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
 uint16_t closeFlag = 0b1111111111111111;
 
+// Buffer for the datagram to be sent
+u_char sndDatagram[BUFFER_SIZE];  
+
 // Prints the error message passed. 
 void error(const char *msg)
 {
@@ -93,9 +96,11 @@ void makeHeader(u_char *sndDatagram)
 
 }
 
-void sendDatagram(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagram)
+void sendDatagram(int *sockfd, struct sockaddr_in *server_addr)
 {
 
+  makeHeader(sndDatagram);    
+  
   for (int i=0; i<20; i++) {
     printf("pre chck: %u\n", (unsigned int)sndDatagram[i]);
   }
@@ -115,7 +120,7 @@ void sendDatagram(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatag
 }
 
 // Closes the connection to the server
-void closeConnection(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagram)
+void closeConnection(int *sockfd, struct sockaddr_in *server_addr)
 {
 	
   sndDatagram[0] = sequenceNumber >> 24;
@@ -127,7 +132,7 @@ void closeConnection(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDa
   sndDatagram[6] = closeFlag >> 8;
   sndDatagram[7] = closeFlag;
 
-  sendDatagram(sockfd, server_addr, sndDatagram);
+  sendDatagram(sockfd, server_addr);
 }
 
 
@@ -147,9 +152,6 @@ int main(int argc, char *argv[])
 
   // Read/Write stream buffer, the server's host name, and the file's name to read from. 
   char buffer[BUFFER_SIZE], *host_name, *file_name;
-
-	// Buffer for the datagram to be sent
-	u_char sndDatagram[BUFFER_SIZE];  
 
 
   if (argc < 6) {
@@ -188,20 +190,19 @@ int main(int argc, char *argv[])
   // Copies the server info into the the appropriate socket struct. 
   bcopy((char *) server->h_addr, (char *) &server_addr.sin_addr.s_addr, server->h_length);
 
-  memset(sndDatagram, 0, BUFFER_SIZE);  
+  memcpy(&sndDatagram[8], "hello, world!", 13);   // Add data
+  //makeHeader(sndDatagram);    
+  sendDatagram(&sockfd, &server_addr);
 
-  strcpy(buffer, "hello, world!");
-  addData(sndDatagram, buffer);
-  makeHeader(sndDatagram);
-	sendDatagram(&sockfd, &server_addr, sndDatagram);
+  memcpy(&sndDatagram[8], "Dog", 3);  // Add data
+  //makeHeader(sndDatagram);  
+  sendDatagram(&sockfd, &server_addr);
 
-  strcpy(buffer, "Second hello");
-  addData(sndDatagram, buffer);
-  makeHeader(sndDatagram);
-  sendDatagram(&sockfd, &server_addr, sndDatagram);
+  memcpy(&sndDatagram[8], "CLOSE", 5);  // Add data
+  //makeHeader(sndDatagram);  
+  sendDatagram(&sockfd, &server_addr);
 
-  closeConnection(&sockfd, &server_addr, sndDatagram);
-
+  //closeConnection(&sockfd, &server_addr);
   close(sockfd);
 
   return 0;

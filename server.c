@@ -90,6 +90,13 @@ uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
 // //  sequenceNumber++;
 // }
 
+void printBuffer(u_char *buffer)
+{
+  for (int i=0; i<20; i++) {
+    printf("pre chck: %u\n", (unsigned int)buffer[i]);
+  }
+}
+
 int main(int argc, char *argv[])
 {
   int sockfd, portno;                         // The socket file descriptor & port number
@@ -160,7 +167,7 @@ int main(int argc, char *argv[])
     }
     printf("letter: %c\n", (char)recvdDatagram[8]);
 
-    // Retrieve header
+    //Retrieve header
     uint32_t seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
     uint16_t chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
     uint16_t flagRecvd = (recvdDatagram[6] << 8) | recvdDatagram[7];
