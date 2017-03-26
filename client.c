@@ -16,6 +16,7 @@
 
 uint32_t sequenceNumber = 0;
 const uint16_t pseudoChksum = 0b0000000000000000;
+const uint16_t ackFlag = 0b1010101010101010;
 const uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
 const uint16_t closeFlag = 0b1111111111111111;
 

@@ -36,11 +36,11 @@ int cpupri_find(struct cpupri *cp, struct task_struct *p,
 {
   */
 
-//unsigned long sequenceNumber = 0;
-uint16_t pseudoChksum = 0b0000000000000000;
-uint16_t ackFlag = 0b1010101010101010;
-uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
-uint16_t closeFlag = 0b1111111111111111;
+uint32_t sequenceNumberExpected = 0;
+const uint16_t pseudoChksum = 0b0000000000000000;
+const uint16_t ackFlag = 0b1010101010101010;
+const uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
+const uint16_t closeFlag = 0b1111111111111111;
 
 // Prints the error message passed. 
 void error(const char *msg)
@@ -89,6 +89,39 @@ uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
 //   }
 // //  sequenceNumber++;
 // }
+
+int verifySequence(uint32_t seqRecvd)
+{
+  if ( seqRecvd == sequenceNumberExpected) {
+    printf("The sequence # was as expected\n");
+    sequenceNumberExpected++;    
+    return 1;
+  } else {
+    printf("The sequence # was not as expected\n");
+    return 0;    
+  }
+}
+
+int verifyChksum(u_char *datagram, uint16_t chkRecvd)
+{
+  uint32_t sum = 0;
+  uint16_t calcdChk = 0;
+
+  // Make pseudo header for checksum calculation
+  datagram[4] = pseudoChksum >> 8;
+  datagram[5] = pseudoChksum;
+
+  calcdChk = calcChecksum(datagram, BUFFER_SIZE, sum);
+  printf("Calc'd Chk: %u\n", (unsigned int)calcdChk);
+
+  if (calcdChk == chkRecvd) {
+    printf("The checksums matched\n");
+    return 1;
+  } else {
+    printf("The checksums did not matched\n");    
+    return 0;
+  }
+}    
 
 void printDGram(u_char *dGram, int dGramLen)
 {
@@ -167,7 +200,7 @@ int main(int argc, char *argv[])
     }
     printf("receivesize: %d\n", recsize);
 
-    //printDGram(recvdDatagram, 15);
+    //printDGram(recvdDatagram, 15);    
 
     //Retrieve header
     uint32_t seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
@@ -175,28 +208,17 @@ int main(int argc, char *argv[])
     uint16_t flagRecvd = (recvdDatagram[6] << 8) | recvdDatagram[7];
     printf("Seq: %u, Chk: %u, Flag: %u\n", seqRecvd, chkRecvd, flagRecvd);
 
-
     if (flagRecvd == closeFlag) {
       break;
     }
 
+    if ( verifyChksum(recvdDatagram, chkRecvd) && verifySequence(seqRecvd) ) {
+      printf("It is all good dog\n\n");
+      //sendAck();
+      //writeFile();
+    }
 
-//    printf("pre chck: %u\n", (unsigned int)recvdDatagram[5]);
-    // Make pseudo header for checksum calculation
-    recvdDatagram[4] = pseudoChksum >> 8;
-    recvdDatagram[5] = pseudoChksum;
-    //printf("post chck: %u\n", (unsigned int)recvdDatagram[5]);
-
-    uint32_t sum;
-    uint16_t calcdChk = calcChecksum(recvdDatagram, BUFFER_SIZE, sum);
-    printf("Calc'd Chk: %u\n\n", (unsigned int)calcdChk);
-
-    memset(recvdDatagram, 0, BUFFER_SIZE);
-
-    /*if ( verifyChksum() && verifySequence() ) {
-      sendAck();
-      writeFile();
-    }*/
+    memset(recvdDatagram, 0, BUFFER_SIZE);    
   }
 
   printf("The client has closed the connection\n");
