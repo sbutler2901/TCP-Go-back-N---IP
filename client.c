@@ -15,9 +15,9 @@
 #define BUFFER_SIZE 256
 
 uint32_t sequenceNumber = 0;
-uint16_t pseudoChksum = 0b0000000000000000;
-uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
-uint16_t closeFlag = 0b1111111111111111;
+const uint16_t pseudoChksum = 0b0000000000000000;
+const uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
+const uint16_t closeFlag = 0b1111111111111111;
 
 // Buffer for the datagram to be sent
 u_char sndDatagram[BUFFER_SIZE] = {0};  
@@ -66,10 +66,18 @@ void printDGram(u_char *dGram, int dGramLen)
   }
 }
 
-// void addData(u_char *sndDatagram, char *buffer)
-// {
-// 	memcpy(&sndDatagram[8], buffer, BUFFER_SIZE - 8);
-// }
+void addData(char *buffer, int buffLen)
+{
+  int numBytes;
+
+  // This will need improvement, but for now this is adequeate
+  if (buffLen > BUFFER_SIZE - 8) {
+    numBytes = BUFFER_SIZE - 8;
+  } else {
+    numBytes = buffLen;
+  }
+	memcpy(&sndDatagram[8], buffer, numBytes);
+}
 
 // Adds the computed checksum after calculating with the pseudo header
 void addNewChksum(uint16_t calcdChk)
@@ -114,10 +122,6 @@ void makeHeader()
 
 void sendDatagram(int *sockfd, struct sockaddr_in *server_addr)
 {
-
-  //makeHeader();
-
-  //printDGram(sndDatagram, 15);
 
   int sendsize = sendto(*sockfd, sndDatagram, sizeof(sndDatagram), 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   
@@ -205,24 +209,25 @@ int main(int argc, char *argv[])
 
   memset(sndDatagram, 0, BUFFER_SIZE);
 
-  memcpy(&sndDatagram[8], "Dog", 3);  // Add data
+  //memcpy(&sndDatagram[8], "Dog", 3);  // Add data
+  addData("Dog", 3);
   makeHeader();    
   sendDatagram(&sockfd, &server_addr);  
 
-  memcpy(&sndDatagram[8], "hello, world!", 13);   // Add data
+  addData("hello, world!", 13);
   makeHeader();    
   sendDatagram(&sockfd, &server_addr);
 
 
-  memcpy(&sndDatagram[8], "Dog", 3);  // Add data
+  addData("Dog", 3);  // Add data
   makeHeader();  
   sendDatagram(&sockfd, &server_addr);
 
-  memcpy(&sndDatagram[8], "CLOSE", 5);  // Add data
+  addData("CLOSE", 5);  // Add data
   makeHeader();  
   sendDatagram(&sockfd, &server_addr);
 
-  //closeConnection(&sockfd, &server_addr);
+  closeConnection(&sockfd, &server_addr);
   close(sockfd);
 
   return 0;

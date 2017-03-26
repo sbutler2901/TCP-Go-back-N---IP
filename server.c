@@ -167,13 +167,14 @@ int main(int argc, char *argv[])
     }
     printf("receivesize: %d\n", recsize);
 
+    //printDGram(recvdDatagram, 15);
+
     //Retrieve header
     uint32_t seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
     uint16_t chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
     uint16_t flagRecvd = (recvdDatagram[6] << 8) | recvdDatagram[7];
     printf("Seq: %u, Chk: %u, Flag: %u\n", seqRecvd, chkRecvd, flagRecvd);
 
-    //printDGram(recvdDatagram, 15);
 
     if (flagRecvd == closeFlag) {
       break;
