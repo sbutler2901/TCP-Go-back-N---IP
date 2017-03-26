@@ -20,7 +20,7 @@ uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
 uint16_t closeFlag = 0b1111111111111111;
 
 // Buffer for the datagram to be sent
-u_char sndDatagram[BUFFER_SIZE];  
+u_char sndDatagram[BUFFER_SIZE] = {0};  
 
 // Prints the error message passed. 
 void error(const char *msg)
@@ -79,7 +79,7 @@ void addNewChksum(u_char *sndDatagram, uint16_t calcdChk)
 }
 
 // Makes the header for regular data grams
-void makeHeader(u_char *sndDatagram)
+void makeHeader()
 {
 
   uint32_t sum, seqSend;
@@ -111,7 +111,7 @@ void makeHeader(u_char *sndDatagram)
 void sendDatagram(int *sockfd, struct sockaddr_in *server_addr)
 {
 
-  makeHeader(sndDatagram);
+  makeHeader();
 
   printDGram(sndDatagram, 15);
 
@@ -121,7 +121,7 @@ void sendDatagram(int *sockfd, struct sockaddr_in *server_addr)
     error("Error sending the packet:");
     exit(EXIT_FAILURE);
   } else {
-    printf("sendsize: %d\n", sendsize);
+    printf("sendsize: %d\n\n", sendsize);
   }
   memset(sndDatagram, 0, BUFFER_SIZE);
 
@@ -199,9 +199,16 @@ int main(int argc, char *argv[])
   // Copies the server info into the the appropriate socket struct. 
   bcopy((char *) server->h_addr, (char *) &server_addr.sin_addr.s_addr, server->h_length);
 
+  memset(sndDatagram, 0, BUFFER_SIZE);
+
+  memcpy(&sndDatagram[8], "Dog", 3);  // Add data
+  //makeHeader(sndDatagram);    
+  sendDatagram(&sockfd, &server_addr);  
+
   memcpy(&sndDatagram[8], "hello, world!", 13);   // Add data
   //makeHeader(sndDatagram);    
   sendDatagram(&sockfd, &server_addr);
+
 
   memcpy(&sndDatagram[8], "Dog", 3);  // Add data
   //makeHeader(sndDatagram);  
