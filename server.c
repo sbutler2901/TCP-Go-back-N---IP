@@ -90,10 +90,15 @@ uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
 // //  sequenceNumber++;
 // }
 
-void printBuffer(u_char *buffer)
+void printDGram(u_char *dGram, int dGramLen)
 {
-  for (int i=0; i<20; i++) {
-    printf("pre chck: %u\n", (unsigned int)buffer[i]);
+  // Prints the header
+  for (int i=0; i < dGramLen + 8; i++) {
+    if (i < 8) {
+      printf("dGram[%d]: %u\n", i, (unsigned int)dGram[i]);      
+    } else {
+      printf("dGram[%d]: %c\n", i, (char)dGram[i]);      
+    }
   }
 }
 
@@ -162,16 +167,14 @@ int main(int argc, char *argv[])
     }
     printf("receivesize: %d\n", recsize);
 
-    for (int i=0; i<20; i++) {
-      printf("pre chck: %u\n", (unsigned int)recvdDatagram[i]);
-    }
-    printf("letter: %c\n", (char)recvdDatagram[8]);
+    //printDGram(recvdDatagram, 15);
 
     //Retrieve header
     uint32_t seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
     uint16_t chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
     uint16_t flagRecvd = (recvdDatagram[6] << 8) | recvdDatagram[7];
     printf("Seq: %u, Chk: %u, Flag: %u\n", seqRecvd, chkRecvd, flagRecvd);
+
 
     if (flagRecvd == closeFlag) {
       break;
@@ -182,11 +185,11 @@ int main(int argc, char *argv[])
     // Make pseudo header for checksum calculation
     recvdDatagram[4] = pseudoChksum >> 8;
     recvdDatagram[5] = pseudoChksum;
-    printf("post chck: %u\n", (unsigned int)recvdDatagram[5]);
+    //printf("post chck: %u\n", (unsigned int)recvdDatagram[5]);
 
     uint32_t sum;
     uint16_t calcdChk = calcChecksum(recvdDatagram, BUFFER_SIZE, sum);
-    printf("Calc'd Chk: %u\n", (unsigned int)calcdChk);
+    printf("Calc'd Chk: %u\n\n", (unsigned int)calcdChk);
 
     memset(recvdDatagram, 0, BUFFER_SIZE);
 

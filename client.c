@@ -15,12 +15,12 @@
 #define BUFFER_SIZE 256
 
 uint32_t sequenceNumber = 0;
-uint16_t pseudoChksum = 0b0000000000000000;
-uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
-uint16_t closeFlag = 0b1111111111111111;
+const uint16_t pseudoChksum = 0b0000000000000000;
+const uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
+const uint16_t closeFlag = 0b1111111111111111;
 
 // Buffer for the datagram to be sent
-u_char sndDatagram[BUFFER_SIZE];  
+u_char sndDatagram[BUFFER_SIZE] = {0};  
 
 // Prints the error message passed. 
 void error(const char *msg)
@@ -29,13 +29,13 @@ void error(const char *msg)
   exit(0);
 }
 
-uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
+uint16_t calcChecksum(unsigned nbytes, uint32_t sum)
 {
   uint i;
 
   // Checksum all the pairs of bytes first...
   for (i = 0; i < (nbytes & ~1U); i += 2) {
-    sum += (uint16_t)ntohs(*((uint16_t *)(buf + i)));
+    sum += (uint16_t)ntohs(*((uint16_t *)(sndDatagram + i)));
     if (sum > 0xFFFF)
       sum -= 0xFFFF;
   }
@@ -46,7 +46,7 @@ uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
    * the high byte.
    */
   if (i < nbytes) {
-    sum += buf[i] << 8;
+    sum += sndDatagram[i] << 8;
     if (sum > 0xFFFF)
       sum -= 0xFFFF;
   }
@@ -54,24 +54,44 @@ uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
   return (sum);
 }
 
-void addData(u_char *sndDatagram, char *buffer)
+void printDGram(u_char *dGram, int dGramLen)
 {
-	memcpy(&sndDatagram[8], buffer, BUFFER_SIZE - 8);
+  // Prints the header
+  for (int i=0; i < dGramLen + 8; i++) {
+    if (i < 8) {
+      printf("dGram[%d]: %u\n", i, (unsigned int)dGram[i]);      
+    } else {
+      printf("dGram[%d]: %c\n", i, (char)dGram[i]);      
+    }
+  }
+}
+
+void addData(char *buffer, int buffLen)
+{
+  int numBytes;
+
+  // This will need improvement, but for now this is adequeate
+  if (buffLen > BUFFER_SIZE - 8) {
+    numBytes = BUFFER_SIZE - 8;
+  } else {
+    numBytes = buffLen;
+  }
+	memcpy(&sndDatagram[8], buffer, numBytes);
 }
 
 // Adds the computed checksum after calculating with the pseudo header
-void addNewChksum(u_char *sndDatagram, uint16_t calcdChk)
+void addNewChksum(uint16_t calcdChk)
 {
 	sndDatagram[4] = calcdChk >> 8;
   sndDatagram[5] = calcdChk;
 }
 
 // Makes the header for regular data grams
-void makeHeader(u_char *sndDatagram)
+void makeHeader()
 {
 
-  uint32_t sum, seqSend;
-  uint16_t calcdChk, chkSend, dataSend;
+  uint32_t sum=0, seqSend=0;
+  uint16_t calcdChk=0, chkSend=0, dataSend=0;
 
   sndDatagram[0] = sequenceNumber >> 24;
   sndDatagram[1] = sequenceNumber >> 16;
@@ -82,9 +102,13 @@ void makeHeader(u_char *sndDatagram)
   sndDatagram[6] = dataFlag >> 8;
   sndDatagram[7] = dataFlag;
 
-  calcdChk = calcChecksum(sndDatagram, BUFFER_SIZE, sum);
+  //printDGram(sndDatagram, 15);
 
-  addNewChksum(sndDatagram, calcdChk);  
+  calcdChk = calcChecksum(BUFFER_SIZE, sum);
+
+  printf("Calc'd Chk0: %u\n", calcdChk);
+
+  addNewChksum(calcdChk);  
 
   // For testing purposes
   seqSend = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
@@ -92,19 +116,12 @@ void makeHeader(u_char *sndDatagram)
   dataSend = (sndDatagram[6] << 8) | sndDatagram[7];
 
   printf("Seq: %u, Chk: %u, Flag: %u\n", seqSend, chkSend, dataSend);
-  printf("Calc'd Chk: %u\n", calcdChk);
+  printf("Calc'd Chk1: %u\n", calcdChk);
 
 }
 
 void sendDatagram(int *sockfd, struct sockaddr_in *server_addr)
 {
-
-  makeHeader(sndDatagram);    
-  
-  for (int i=0; i<20; i++) {
-    printf("pre chck: %u\n", (unsigned int)sndDatagram[i]);
-  }
-  printf("letter: %c\n", (char)sndDatagram[8]);
 
   int sendsize = sendto(*sockfd, sndDatagram, sizeof(sndDatagram), 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   
@@ -112,7 +129,7 @@ void sendDatagram(int *sockfd, struct sockaddr_in *server_addr)
     error("Error sending the packet:");
     exit(EXIT_FAILURE);
   } else {
-    printf("sendsize: %d\n", sendsize);
+    printf("sendsize: %d\n\n", sendsize);
   }
   memset(sndDatagram, 0, BUFFER_SIZE);
 
@@ -190,19 +207,27 @@ int main(int argc, char *argv[])
   // Copies the server info into the the appropriate socket struct. 
   bcopy((char *) server->h_addr, (char *) &server_addr.sin_addr.s_addr, server->h_length);
 
-  memcpy(&sndDatagram[8], "hello, world!", 13);   // Add data
-  //makeHeader(sndDatagram);    
+  memset(sndDatagram, 0, BUFFER_SIZE);
+
+  //memcpy(&sndDatagram[8], "Dog", 3);  // Add data
+  addData("Dog", 3);
+  makeHeader();    
+  sendDatagram(&sockfd, &server_addr);  
+
+  addData("hello, world!", 13);
+  makeHeader();    
   sendDatagram(&sockfd, &server_addr);
 
-  memcpy(&sndDatagram[8], "Dog", 3);  // Add data
-  //makeHeader(sndDatagram);  
+
+  addData("Dog", 3);  // Add data
+  makeHeader();  
   sendDatagram(&sockfd, &server_addr);
 
-  memcpy(&sndDatagram[8], "CLOSE", 5);  // Add data
-  //makeHeader(sndDatagram);  
+  addData("CLOSE", 5);  // Add data
+  makeHeader();  
   sendDatagram(&sockfd, &server_addr);
 
-  //closeConnection(&sockfd, &server_addr);
+  closeConnection(&sockfd, &server_addr);
   close(sockfd);
 
   return 0;
