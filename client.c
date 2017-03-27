@@ -11,11 +11,13 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h> 
+#include <limits.h>
 
 #define BUFFER_SIZE 256
 
 uint32_t sequenceNumber = 0;
 const uint16_t pseudoChksum = 0b0000000000000000;
+const uint16_t ackFlag = 0b1010101010101010;
 const uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
 const uint16_t closeFlag = 0b1111111111111111;
 
@@ -106,8 +108,6 @@ void makeHeader()
 
   calcdChk = calcChecksum(BUFFER_SIZE, sum);
 
-  printf("Calc'd Chk0: %u\n", calcdChk);
-
   addNewChksum(calcdChk);  
 
   // For testing purposes
@@ -116,8 +116,6 @@ void makeHeader()
   dataSend = (sndDatagram[6] << 8) | sndDatagram[7];
 
   printf("Seq: %u, Chk: %u, Flag: %u\n", seqSend, chkSend, dataSend);
-  printf("Calc'd Chk1: %u\n", calcdChk);
-
 }
 
 void sendDatagram(int *sockfd, struct sockaddr_in *server_addr)
@@ -129,11 +127,43 @@ void sendDatagram(int *sockfd, struct sockaddr_in *server_addr)
     error("Error sending the packet:");
     exit(EXIT_FAILURE);
   } else {
-    printf("sendsize: %d\n\n", sendsize);
+    printf("sendsize: %d\n", sendsize);
   }
   memset(sndDatagram, 0, BUFFER_SIZE);
 
   sequenceNumber++;
+  if (sequenceNumber == USHRT_MAX) sequenceNumber = 0;    // refer to getAck()
+}
+
+void verifyAck(uint32_t ackdSeqNum)
+{
+  if (ackdSeqNum == USHRT_MAX) printf("The received datagram was not an ACK\n");
+  else printf("Seq # %u has been acknowledged\n\n", ackdSeqNum);
+}
+
+// If the ack received does not have to appropriate flag in the header USHRT_MAX will be returned
+uint32_t getAck(int *sockfd, struct sockaddr_in *server_addr, socklen_t *clientLen)
+{
+  int recsize;
+  u_char recvdDatagram[BUFFER_SIZE] = {0};    // Buffer for receiving datagram
+
+  recsize = recvfrom(*sockfd, (void*)recvdDatagram, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, clientLen);
+  if (recsize < 0) {
+    error("ERROR on recvfrom");
+    exit(1);
+  }
+  printf("receivesize: %d\n", recsize);
+
+  uint32_t seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
+  uint16_t chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
+  uint16_t flagRecvd = (recvdDatagram[6] << 8) | recvdDatagram[7];
+  printf("Ack's Seq: %u, Chk: %u, Flag: %u\n", seqRecvd, chkRecvd, flagRecvd); 
+
+  if (flagRecvd == ackFlag) {
+    printf("The ACK for seq # %d was received\n", seqRecvd);
+    return seqRecvd;
+  }
+  return USHRT_MAX;
 }
 
 // Closes the connection to the server
@@ -162,6 +192,7 @@ int main(int argc, char *argv[])
   // Sockadder_in struct that stores the IP address, 
   // port, and etc of the server.
   struct sockaddr_in server_addr;
+  socklen_t clientLen;                        // Stores the size of the clients sockaddr_in 
 
   // Hostent struct that keeps relevant host info. 
   // Such as official name and address family.
@@ -196,6 +227,8 @@ int main(int argc, char *argv[])
   server_addr.sin_family = AF_INET;					// Internet Address Family 
   server_addr.sin_port = htons(portno);		  // Port Number in Network Byte Order 
 
+  clientLen = sizeof(server_addr);
+
   // Retrieves the host information based on the address
   // passed from the users commandline. 
   server = gethostbyname(argv[1]);
@@ -213,19 +246,22 @@ int main(int argc, char *argv[])
   addData("Dog", 3);
   makeHeader();    
   sendDatagram(&sockfd, &server_addr);  
+  verifyAck( getAck(&sockfd, &server_addr, &clientLen) );  
 
   addData("hello, world!", 13);
   makeHeader();    
   sendDatagram(&sockfd, &server_addr);
-
+  verifyAck( getAck(&sockfd, &server_addr, &clientLen) );  
 
   addData("Dog", 3);  // Add data
   makeHeader();  
   sendDatagram(&sockfd, &server_addr);
+  verifyAck( getAck(&sockfd, &server_addr, &clientLen) );  
 
   addData("CLOSE", 5);  // Add data
   makeHeader();  
   sendDatagram(&sockfd, &server_addr);
+  verifyAck( getAck(&sockfd, &server_addr, &clientLen) );  
 
   closeConnection(&sockfd, &server_addr);
   close(sockfd);
