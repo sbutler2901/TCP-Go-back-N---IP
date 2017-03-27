@@ -16,28 +16,6 @@
 #define BUFFER_SIZE 256
 #define ACK_DGRAM_SIZE 8
 
-
-/*
-
-/**
- * cpupri_find - find the best (lowest-pri) CPU in the system
- * @cp: The cpupri context
- * @p: The task
- * @lowest_mask: A mask to fill in with selected CPUs (or NULL)
- *
- * Note: This function returns the recommended CPUs as calculated during the
- * current invocation.  By the time the call returns, the CPUs may have in
- * fact changed priorities any number of times.  While not ideal, it is not
- * an issue of correctness since the normal rebalancer logic will correct
- * any discrepancies created by racing against the uncertainty of the current
- * priority configuration.
- *
- * Return: (int)bool - CPUs were found
-int cpupri_find(struct cpupri *cp, struct task_struct *p,
-    struct cpumask *lowest_mask)
-{
-  */
-
 uint32_t sequenceNumberExpected = 0;    // the USHRT_MAX for this variable is used to signify a failed ACK on the client side
 const uint16_t pseudoChksum = 0b0000000000000000;
 const uint16_t ackFlag = 0b1010101010101010;
@@ -51,6 +29,12 @@ void error(const char *msg)
   exit(1);
 }
 
+/**
+ * printDGram - print the datagram to the console
+ * @dGram: The datagram to be printed
+ * @dGramLen: The length of the datagram's data component
+ *
+ **/
 void printDGram(u_char *dGram, int dGramLen)
 {
   // Prints the header
@@ -63,6 +47,13 @@ void printDGram(u_char *dGram, int dGramLen)
   }
 }
 
+/**
+ * calcChecksum - calculate the checksum of the datagram to be sent
+ * @nbytes: The number of bytes in the buffer
+ * @sum: The variable to hold the checksum during computing
+ *
+ * Return: uint16_t - The checksum calculated
+ **/
 uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
 {
   uint i;
@@ -88,7 +79,11 @@ uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
   return (sum);
 }
 
-// Makes the header for regular data grams
+/**
+ * makeHeader - makes the header for the ACK datagram to be sent to the client
+ * @ackDatagram - the datagram to be sent to the client
+ * @seqNum - the sequence number being ACK'd
+ **/
 void makeHeader(u_char *ackDatagram, uint32_t seqNum)
 {
 
@@ -113,6 +108,13 @@ void makeHeader(u_char *ackDatagram, uint32_t seqNum)
 
 }
 
+/**
+ * sendAck - sends an ACK to the client for a datagram received
+ * @sockfd: The file descriptor for the socket
+ * @server_addr: Contains the info for the server
+ * @ackDatagram: The datagram to be sent to the client
+ * @seqNum: The sequence number being ACK'd
+ **/
 void sendAck(int *sockfd, struct sockaddr_in *server_addr, u_char *ackDatagram, uint32_t seqNum)
 {
   printf("Sending Ack for sequence # %d: ", seqNum);
@@ -133,6 +135,10 @@ void sendAck(int *sockfd, struct sockaddr_in *server_addr, u_char *ackDatagram, 
   memset(ackDatagram, 0, BUFFER_SIZE);
 }
 
+/**
+ * verifySequence - verifies the sequence number of the datagram received from the client was what it should be
+ * @seqRecvd: The sequence number being verified
+ **/
 int verifySequence(uint32_t seqRecvd)
 {
   if ( seqRecvd == sequenceNumberExpected) {
@@ -147,6 +153,13 @@ int verifySequence(uint32_t seqRecvd)
   }
 }
 
+/**
+ * verifyChksum - verifies the checksum of the datagram receieved from the client
+ * @datagram: The datagram the checksum is being computed on
+ * @chkRecvd: The checksum received in the datagram
+ *
+ * Return: (int)bool - if the checksums matched
+ **/
 int verifyChksum(u_char *datagram, uint16_t chkRecvd)
 {
   uint32_t sum = 0;
@@ -172,7 +185,6 @@ int main(int argc, char *argv[])
 {
   int sockfd, portno;                         // The socket file descriptor & port number
   double drop_prob;                           // Probablity a packet is dropped
-
   
   char *file_name;                            // The file to write to and the buffer to store the datagram
   //u_char buffer[BUFFER_SIZE] = {0};           // Buffer for ACKs

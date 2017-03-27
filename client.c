@@ -31,6 +31,31 @@ void error(const char *msg)
   exit(0);
 }
 
+/**
+ * printDGram - print the datagram to the console
+ * @dGram: The datagram to be printed
+ * @dGramLen: The length of the datagram's data component
+ *
+ **/
+void printDGram(u_char *dGram, int dGramLen)
+{
+  // Prints the header
+  for (int i=0; i < dGramLen + 8; i++) {
+    if (i < 8) {
+      printf("dGram[%d]: %u\n", i, (unsigned int)dGram[i]);      
+    } else {
+      printf("dGram[%d]: %c\n", i, (char)dGram[i]);      
+    }
+  }
+}
+
+/**
+ * calcChecksum - calculate the checksum of the datagram to be sent
+ * @nbytes: The number of bytes in the buffer
+ * @sum: The variable to hold the checksum during computing
+ *
+ * Return: uint16_t - The checksum calculated
+ **/
 uint16_t calcChecksum(unsigned nbytes, uint32_t sum)
 {
   uint i;
@@ -56,18 +81,11 @@ uint16_t calcChecksum(unsigned nbytes, uint32_t sum)
   return (sum);
 }
 
-void printDGram(u_char *dGram, int dGramLen)
-{
-  // Prints the header
-  for (int i=0; i < dGramLen + 8; i++) {
-    if (i < 8) {
-      printf("dGram[%d]: %u\n", i, (unsigned int)dGram[i]);      
-    } else {
-      printf("dGram[%d]: %c\n", i, (char)dGram[i]);      
-    }
-  }
-}
-
+/**
+ * addData - adds the data from the buffer to the datagram
+ * @buffer: The buffer the data is coming from
+ * @buffLen: The length of the data in the buffer
+ **/
 void addData(char *buffer, int buffLen)
 {
   int numBytes;
@@ -81,7 +99,10 @@ void addData(char *buffer, int buffLen)
 	memcpy(&sndDatagram[8], buffer, numBytes);
 }
 
-// Adds the computed checksum after calculating with the pseudo header
+/**
+ * addNewChksum - adds the computed checksum to the datagram
+ * @calcdChk: The computed checksum
+ **/
 void addNewChksum(uint16_t calcdChk)
 {
 	sndDatagram[4] = calcdChk >> 8;
@@ -89,6 +110,12 @@ void addNewChksum(uint16_t calcdChk)
 }
 
 // Makes the header for regular data grams
+/**
+ * makeHeader - makes the header for the datagram to be sent
+ *
+ * Note: The checksum is computed on a header with the pseudo-checksum
+ * in the header component for the checksum   
+ **/
 void makeHeader()
 {
 
@@ -118,6 +145,11 @@ void makeHeader()
   printf("Seq: %u, Chk: %u, Flag: %u\n", seqSend, chkSend, dataSend);
 }
 
+/**
+ * sendDatagram - sends the datagram to the server
+ * @sockfd: The file descriptor for the socket
+ * @server_addr: Contains the info for the server
+ **/
 void sendDatagram(int *sockfd, struct sockaddr_in *server_addr)
 {
 
@@ -134,14 +166,29 @@ void sendDatagram(int *sockfd, struct sockaddr_in *server_addr)
   sequenceNumber++;
   if (sequenceNumber == USHRT_MAX) sequenceNumber = 0;    // refer to getAck()
 }
-
+/**
+ * verifyAck - verifys the ACK'd seq # received from the server
+ * @ackdSeqNum: The sequence # received in the ACK
+ *
+ * Note: If the sequence number is USHRT_MAX then the datagram received was not
+ * an ACK.
+ **/
 void verifyAck(uint32_t ackdSeqNum)
 {
   if (ackdSeqNum == USHRT_MAX) printf("The received datagram was not an ACK\n");
   else printf("Seq # %u has been acknowledged\n\n", ackdSeqNum);
 }
 
-// If the ack received does not have to appropriate flag in the header USHRT_MAX will be returned
+/**
+ * getAck - receives the ACK from the server for the datagram sent.
+ * @sockfd: The file descriptor for the socket
+ * @server_addr: Contains the info for the server
+ * @clientLen: TBD
+ *
+ * Note: If the ack received does not have to appropriate flag in the header USHRT_MAX will be returned
+ *
+ * Return: uint32_t - the sequence # received in the ACK
+ **/
 uint32_t getAck(int *sockfd, struct sockaddr_in *server_addr, socklen_t *clientLen)
 {
   int recsize;
@@ -166,7 +213,11 @@ uint32_t getAck(int *sockfd, struct sockaddr_in *server_addr, socklen_t *clientL
   return USHRT_MAX;
 }
 
-// Closes the connection to the server
+/**
+ * closeConnection - closes the connection to the server using the predefined close flag
+ * @sockfd: The file descriptor for the socket
+ * @server_addr: Contains the info for the server
+ **/
 void closeConnection(int *sockfd, struct sockaddr_in *server_addr)
 {
 	
