@@ -87,8 +87,8 @@ uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
 void makeHeader(u_char *ackDatagram, uint32_t seqNum)
 {
 
-  uint32_t sum=0, seqSend=0;
-  uint16_t calcdChk=0, chkSend=0, dataSend=0;
+  uint32_t seqSend=0;
+  uint16_t chkSend=0, flagSend=0;
 
   ackDatagram[0] = seqNum >> 24;
   ackDatagram[1] = seqNum >> 16;
@@ -102,9 +102,9 @@ void makeHeader(u_char *ackDatagram, uint32_t seqNum)
   // For testing purposes
   seqSend = (ackDatagram[0] <<  24) | (ackDatagram[1] << 16) | (ackDatagram[2] << 8) | ackDatagram[3];
   chkSend = (ackDatagram[4] << 8) | ackDatagram[5];
-  dataSend = (ackDatagram[6] << 8) | ackDatagram[7];
+  flagSend = (ackDatagram[6] << 8) | ackDatagram[7];
 
-  printf("Seq: %u, Chk: %u, Flag: %u\n", seqSend, chkSend, dataSend);
+  printf("ACK Seq: %u, Chk: %u, Flag: %u\n", seqSend, chkSend, flagSend);
 
 }
 
@@ -121,16 +121,17 @@ void sendAck(int *sockfd, struct sockaddr_in *server_addr, u_char *ackDatagram, 
 
   makeHeader(ackDatagram, seqNum);
 
-  int sendsize = sendto(*sockfd, ackDatagram, ACK_DGRAM_SIZE, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
+
+  int sendSize = sendto(*sockfd, ackDatagram, ACK_DGRAM_SIZE, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   
-  if(sendsize < 0) {
+  if(sendSize < 0) {
     error("Error sending the packet:");
     exit(EXIT_FAILURE);
   } else {
-    printf("sendsize: %d\n\n", sendsize);
+    printf("sendSize: %d\n\n", sendSize);
   }
 
-  //printDGram(ackDatagram, 0);
+  printDGram(ackDatagram, sendSize);
 
   memset(ackDatagram, 0, BUFFER_SIZE);
 }
@@ -260,6 +261,9 @@ int main(int argc, char *argv[])
 
     if ( verifyChksum(recvdDatagram, chkRecvd) && verifySequence(seqRecvd) ) {
       sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);
+      //printf("%s\n", (char *)recvdDatagram[8]);
+      //puts((char*)&recvdDatagram[8]);
+      printf("tEst\n");
       //writeFile();
     }
 
