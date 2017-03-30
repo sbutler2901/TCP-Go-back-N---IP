@@ -131,7 +131,7 @@ void sendAck(int *sockfd, struct sockaddr_in *server_addr, u_char *ackDatagram, 
     printf("sendSize: %d\n\n", sendSize);
   }
 
-  printDGram(ackDatagram, sendSize);
+  //printDGram(ackDatagram, sendSize);
 
   memset(ackDatagram, 0, BUFFER_SIZE);
 }
@@ -262,8 +262,10 @@ int main(int argc, char *argv[])
     if ( verifyChksum(recvdDatagram, chkRecvd) && verifySequence(seqRecvd) ) {
       sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);
       //printf("%s\n", (char *)recvdDatagram[8]);
-      //puts((char*)&recvdDatagram[8]);
-      printf("tEst\n");
+      printf("Start Datagram data: ");
+      puts((char*)&recvdDatagram[8]);
+      printf("End Datagram data\n");
+      //printf("tEst\n");
       //writeFile();
     }
 

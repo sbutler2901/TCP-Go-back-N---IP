@@ -203,7 +203,7 @@ uint32_t getAck(int *sockfd, struct sockaddr_in *server_addr, socklen_t *clientL
   }
   printf("receivesize: %d\n", recsize);
 
-  printDGram(recvdDatagram, recsize);
+  //printDGram(recvdDatagram, recsize);
 
   uint32_t seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
   uint16_t chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
