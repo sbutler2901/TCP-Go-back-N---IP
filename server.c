@@ -127,18 +127,19 @@ void makeHeader(u_char *ackDatagram, uint32_t seqNum)
  **/
 void sendAck(int *sockfd, struct sockaddr_in *server_addr, u_char *ackDatagram, uint32_t seqNum)
 {
+	int sendSize;
+
   printf("Sending Ack for sequence # %d: ", seqNum);
 
   makeHeader(ackDatagram, seqNum);
 
-  int sendSize = sendto(*sockfd, ackDatagram, ACK_DGRAM_SIZE, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
+  sendSize = sendto(*sockfd, ackDatagram, ACK_DGRAM_SIZE, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   
   if(sendSize < 0) {
     error("Error sending the packet:");
   } else {
     printf("sendSize: %d\n\n", sendSize);
   }
-  //memset(ackDatagram, 0, BUFFER_SIZE);
 }
 
 /**
@@ -196,7 +197,7 @@ int main(int argc, char *argv[])
   u_char ackDatagram[ACK_DGRAM_SIZE] = {0};		// Buffer for ACKs
   socklen_t clientLen;                        // Stores the size of the clients sockaddr_in 
   struct sockaddr_in server_addr;             // Sockadder_in structs that store IP address, port, and etc for the server and its client. 
-
+	uint32_t seqRecvd, chkRecvd, flagRecvd;			// Stores the sequence #, checksum, and flag from the received datagram
 
   if (argc < 4) {
     fprintf(stderr,"usage: %s port# file-name probablity\n", argv[0]);
@@ -260,9 +261,9 @@ int main(int argc, char *argv[])
     printf("receivesize: %d\n", recsize);
 
     //Retrieve header
-    uint32_t seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
-    uint16_t chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
-    uint16_t flagRecvd = (recvdDatagram[6] << 8) | recvdDatagram[7];
+    seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
+    chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
+    flagRecvd = (recvdDatagram[6] << 8) | recvdDatagram[7];
     printf("Seq: %u, Chk: %u, Flag: %u\n", seqRecvd, chkRecvd, flagRecvd);
 
     if (flagRecvd == closeFlag) {
