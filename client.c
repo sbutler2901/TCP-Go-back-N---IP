@@ -37,16 +37,18 @@ void error(const char *msg)
  * printDGram - print the datagram to the console
  * @dGram: The datagram to be printed
  * @dGramLen: The length of the datagram's data component
+ * @withIndicies: If true, outputs each byte in the datagram with its corresponding index
  *
  **/
-void printDGram(u_char *dGram, int dGramLen)
+void printDGram(u_char *dGram, int dGramLen, uint8_t withIndicies)
 {
   // Prints the header
   for (int i=0; i < dGramLen + 8; i++) {
     if (i < 8) {
       printf("dGram[%d]: %u\n", i, (unsigned int)dGram[i]);      
     } else {
-      printf("dGram[%d]: %c\n", i, (char)dGram[i]);      
+      if(withIndicies > 0) printf("dGram[%d]: %c\n", i, (char)dGram[i]);
+      else printf("%c", (char)dGram[i]);
     }
   }
 }
@@ -92,13 +94,15 @@ void addData(char *buffer, int buffDataLen)
 {
   int numBytes;
 
-  // This will need improvement, but for now this is adequeate
+  // This will need improvement, but for now this is adequate
   if (buffDataLen > BUFFER_SIZE - 8) {
     numBytes = BUFFER_SIZE - 8;
   } else {
     numBytes = buffDataLen;
   }
+
 	memcpy(&sndDatagram[8], buffer, numBytes);
+  memset(buffer, 0, BUFFER_SIZE);      
 }
 
 /**
@@ -163,7 +167,6 @@ void sendDatagram(int *sockfd, struct sockaddr_in *server_addr, int datagramLen)
   } else {
     printf("sendsize: %d\n", sendsize);
   }
-  memset(sndDatagram, 0, BUFFER_SIZE);
 
   sequenceNumber++;
   if (sequenceNumber == USHRT_MAX) sequenceNumber = 0;    // refer to getAck()
@@ -215,6 +218,12 @@ uint32_t getAck(int *sockfd, struct sockaddr_in *server_addr, socklen_t *clientL
     return seqRecvd;
   }
   return USHRT_MAX;
+}
+
+void clearBuffers(char *fileBuffer)
+{
+  memset(sndDatagram, 0, BUFFER_SIZE);
+  memset(fileBuffer, 0, BUFFER_SIZE);  
 }
 
 /**
@@ -326,13 +335,12 @@ int main(int argc, char *argv[])
 
   if(fileToTransfer != NULL) {
     while(readFile(fileBuffer) != NULL) {
-      //puts(fileBuffer);
-      //printf("cntr: %d\n", cntr++);
       addData(fileBuffer, BUFFER_SIZE);
       makeHeader();
       //datagramlen(fileBuffer);
       sendDatagram(&sockfd, &server_addr, BUFFER_SIZE);  
-      verifyAck( getAck(&sockfd, &server_addr, &clientLen) );       
+      verifyAck( getAck(&sockfd, &server_addr, &clientLen) );
+      clearBuffers(fileBuffer);    
     }
   } else {
     error("Error opening the file");
@@ -340,26 +348,6 @@ int main(int argc, char *argv[])
   }
 
   //** End file sending **/
-
-  // addData("Dog", 3);
-  // makeHeader();    
-  // sendDatagram(&sockfd, &server_addr, 11);  
-  // verifyAck( getAck(&sockfd, &server_addr, &clientLen) );  
-
-  // addData("hello, world!", 13);
-  // makeHeader();    
-  // sendDatagram(&sockfd, &server_addr, 21);
-  // verifyAck( getAck(&sockfd, &server_addr, &clientLen) );  
-
-  // addData("Dog", 3);  // Add data
-  // makeHeader();  
-  // sendDatagram(&sockfd, &server_addr, 11);
-  // verifyAck( getAck(&sockfd, &server_addr, &clientLen) );  
-
-  // addData("CLOSE", 5);  // Add data
-  // makeHeader();  
-  // sendDatagram(&sockfd, &server_addr, 13);
-  // verifyAck( getAck(&sockfd, &server_addr, &clientLen) );  
 
   closeConnection(&sockfd, &server_addr);  
   close(sockfd);

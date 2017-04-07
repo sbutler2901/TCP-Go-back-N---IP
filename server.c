@@ -35,16 +35,18 @@ void error(const char *msg)
  * printDGram - print the datagram to the console
  * @dGram: The datagram to be printed
  * @dGramLen: The length of the datagram's data component
+ * @withIndicies: If true, outputs each byte in the datagram with its corresponding index
  *
  **/
-void printDGram(u_char *dGram, int dGramLen)
+void printDGram(u_char *dGram, int dGramLen, uint8_t withIndicies)
 {
   // Prints the header
   for (int i=0; i < dGramLen + 8; i++) {
     if (i < 8) {
       printf("dGram[%d]: %u\n", i, (unsigned int)dGram[i]);      
     } else {
-      printf("dGram[%d]: %c\n", i, (char)dGram[i]);      
+    	if(withIndicies > 0) printf("dGram[%d]: %c\n", i, (char)dGram[i]);
+    	else printf("%c", (char)dGram[i]);
     }
   }
 }
@@ -268,20 +270,16 @@ int main(int argc, char *argv[])
 
     if ( verifyChksum(recvdDatagram, chkRecvd) && verifySequence(seqRecvd) ) {
       sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);
-      //printf("%s\n", (char *)recvdDatagram[8]);
-      printf("Start Datagram data: \n");
       fwrite (&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
-      //printDGram(recvdDatagram, recsize);
-      //puts((char*)&recvdDatagram[8]);
-      printf("End Datagram data\n");
-      //printf("tEst\n");
-      //writeFile();
+      // printf("Start Datagram data: \n");
+      //printDGram(recvdDatagram, 100, 0);
+      // printf("End Datagram data\n");
+
     } else { 
       //printDGram(&recvdDatagram[8], recsize-8);
       break;
     }
 
-    //memset(recvdDatagram, 0, BUFFER_SIZE);
     clearBuffers(recvdDatagram, ackDatagram);
   }
 
