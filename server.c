@@ -22,6 +22,8 @@ const uint16_t ackFlag = 0b1010101010101010;
 const uint16_t dataFlag = 0b0101010101010101;   // (21,845) - base 10
 const uint16_t closeFlag = 0b1111111111111111;
 
+FILE *fileToWrite;
+
 // Prints the error message passed. 
 void error(const char *msg)
 {
@@ -33,18 +35,26 @@ void error(const char *msg)
  * printDGram - print the datagram to the console
  * @dGram: The datagram to be printed
  * @dGramLen: The length of the datagram's data component
+ * @withIndicies: If true, outputs each byte in the datagram with its corresponding index
  *
  **/
-void printDGram(u_char *dGram, int dGramLen)
+void printDGram(u_char *dGram, int dGramLen, uint8_t withIndicies)
 {
   // Prints the header
   for (int i=0; i < dGramLen + 8; i++) {
     if (i < 8) {
       printf("dGram[%d]: %u\n", i, (unsigned int)dGram[i]);      
     } else {
-      printf("dGram[%d]: %c\n", i, (char)dGram[i]);      
+    	if(withIndicies > 0) printf("dGram[%d]: %c\n", i, (char)dGram[i]);
+    	else printf("%c", (char)dGram[i]);
     }
   }
+}
+
+void clearBuffers(u_char *recvdDatagram, u_char *ackDatagram) 
+{
+  memset(recvdDatagram, 0, BUFFER_SIZE);    
+  memset(ackDatagram, 0, ACK_DGRAM_SIZE);    
 }
 
 /**
@@ -87,8 +97,8 @@ uint16_t calcChecksum(unsigned char *buf, unsigned nbytes, uint32_t sum)
 void makeHeader(u_char *ackDatagram, uint32_t seqNum)
 {
 
-  uint32_t sum=0, seqSend=0;
-  uint16_t calcdChk=0, chkSend=0, dataSend=0;
+  uint32_t seqSend=0;
+  uint16_t chkSend=0, flagSend=0;
 
   ackDatagram[0] = seqNum >> 24;
   ackDatagram[1] = seqNum >> 16;
@@ -102,9 +112,9 @@ void makeHeader(u_char *ackDatagram, uint32_t seqNum)
   // For testing purposes
   seqSend = (ackDatagram[0] <<  24) | (ackDatagram[1] << 16) | (ackDatagram[2] << 8) | ackDatagram[3];
   chkSend = (ackDatagram[4] << 8) | ackDatagram[5];
-  dataSend = (ackDatagram[6] << 8) | ackDatagram[7];
+  flagSend = (ackDatagram[6] << 8) | ackDatagram[7];
 
-  printf("Seq: %u, Chk: %u, Flag: %u\n", seqSend, chkSend, dataSend);
+  printf("ACK Seq: %u, Chk: %u, Flag: %u\n", seqSend, chkSend, flagSend);
 
 }
 
@@ -121,18 +131,14 @@ void sendAck(int *sockfd, struct sockaddr_in *server_addr, u_char *ackDatagram, 
 
   makeHeader(ackDatagram, seqNum);
 
-  int sendsize = sendto(*sockfd, ackDatagram, ACK_DGRAM_SIZE, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
+  int sendSize = sendto(*sockfd, ackDatagram, ACK_DGRAM_SIZE, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   
-  if(sendsize < 0) {
+  if(sendSize < 0) {
     error("Error sending the packet:");
-    exit(EXIT_FAILURE);
   } else {
-    printf("sendsize: %d\n\n", sendsize);
+    printf("sendSize: %d\n\n", sendSize);
   }
-
-  //printDGram(ackDatagram, 0);
-
-  memset(ackDatagram, 0, BUFFER_SIZE);
+  //memset(ackDatagram, 0, BUFFER_SIZE);
 }
 
 /**
@@ -160,16 +166,16 @@ int verifySequence(uint32_t seqRecvd)
  *
  * Return: (int)bool - if the checksums matched
  **/
-int verifyChksum(u_char *datagram, uint16_t chkRecvd)
+int verifyChksum(u_char *recvdDatagram, uint16_t chkRecvd)
 {
   uint32_t sum = 0;
   uint16_t calcdChk = 0;
 
   // Make pseudo header for checksum calculation
-  datagram[4] = pseudoChksum >> 8;
-  datagram[5] = pseudoChksum;
+  recvdDatagram[4] = pseudoChksum >> 8;
+  recvdDatagram[5] = pseudoChksum;
 
-  calcdChk = calcChecksum(datagram, BUFFER_SIZE, sum);
+  calcdChk = calcChecksum(recvdDatagram, BUFFER_SIZE, sum);
   printf("Calc'd Chk: %u\n", (unsigned int)calcdChk);
 
   if (calcdChk == chkRecvd) {
@@ -235,6 +241,12 @@ int main(int argc, char *argv[])
     error("ERROR on binding");
   } 
 
+  fileToWrite = fopen(argv[2], "w");
+
+  if(fileToWrite == NULL) {
+    error("Error opening the file\n");
+  }
+
   while (1)
   {
     // Accepts a connection from the client and creates a new socket descriptor
@@ -242,11 +254,8 @@ int main(int argc, char *argv[])
     recsize = recvfrom(sockfd, (void*)recvdDatagram, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, &clientLen);
     if (recsize < 0) {
       error("ERROR on recvfrom");
-      exit(1);
     }
     printf("receivesize: %d\n", recsize);
-
-    //printDGram(recvdDatagram, 15);    
 
     //Retrieve header
     uint32_t seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
@@ -255,18 +264,26 @@ int main(int argc, char *argv[])
     printf("Seq: %u, Chk: %u, Flag: %u\n", seqRecvd, chkRecvd, flagRecvd);
 
     if (flagRecvd == closeFlag) {
+      printf("The client has closed the connection\n");      
       break;
     }
 
     if ( verifyChksum(recvdDatagram, chkRecvd) && verifySequence(seqRecvd) ) {
       sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);
-      //writeFile();
+      fwrite (&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
+      // printf("Start Datagram data: \n");
+      //printDGram(recvdDatagram, 100, 0);
+      // printf("End Datagram data\n");
+
+    } else { 
+      //printDGram(&recvdDatagram[8], recsize-8);
+      break;
     }
 
-    //memset(recvdDatagram, 0, BUFFER_SIZE);    
+    clearBuffers(recvdDatagram, ackDatagram);
   }
 
-  printf("The client has closed the connection\n");
   close(sockfd);
+  fclose(fileToWrite);  
   return 0; 
 }
