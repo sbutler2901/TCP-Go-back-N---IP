@@ -189,23 +189,21 @@ int verifyChksum(u_char *recvdDatagram, uint16_t chkRecvd)
 
 int main(int argc, char *argv[])
 {
-  int sockfd, portno;                         // The socket file descriptor & port number
+  int sockfd, portno, recsize;                // The socket file descriptor, port number, and size of rcvdDatagram
   double drop_prob;                           // Probablity a packet is dropped
-  
   char *file_name;                            // The file to write to and the buffer to store the datagram
-  //u_char buffer[BUFFER_SIZE] = {0};           // Buffer for ACKs
   u_char recvdDatagram[BUFFER_SIZE] = {0};    // Buffer for receiving datagram
-  u_char ackDatagram[ACK_DGRAM_SIZE] = {0};
-
+  u_char ackDatagram[ACK_DGRAM_SIZE] = {0};		// Buffer for ACKs
   socklen_t clientLen;                        // Stores the size of the clients sockaddr_in 
-  int recsize;                            // Stores size of received datagram
-
   struct sockaddr_in server_addr;             // Sockadder_in structs that store IP address, port, and etc for the server and its client. 
+
 
   if (argc < 4) {
     fprintf(stderr,"usage: %s port# file-name probablity\n", argv[0]);
     exit(1);
   }
+
+	//*** Init - Begin ***  
 
   portno = atoi(argv[1]);
   file_name = argv[2];
@@ -247,6 +245,10 @@ int main(int argc, char *argv[])
     error("Error opening the file\n");
   }
 
+  //*** Init - End ***
+
+  //*** The client processes are ready to begin ***
+
   while (1)
   {
     // Accepts a connection from the client and creates a new socket descriptor
@@ -285,5 +287,5 @@ int main(int argc, char *argv[])
 
   close(sockfd);
   fclose(fileToWrite);  
-  return 0; 
+  exit(0); 
 }
