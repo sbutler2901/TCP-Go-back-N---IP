@@ -1,0 +1,22 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1404\cocoasubrtf470
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+\margl1440\margr1440\vieww13220\viewh13180\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\b\fs36 \cf0 Client:
+\b0 \
+1. read data from file until achieve MSS then sent\
+2. Go-back-N: implement sending size N (less than N un acknowledged segements: send)\
+	a. N=1 : reduce to Stop & wait\
+\
+
+\b Server:
+\b0 \
+1. probablistic loss service 
+\i p
+\i0  at packet reception before Go-back-N generate randome # 
+\i r
+\i0 . If 
+\i r
+\i0  <= p, discard packet (no ack), else process according to Go-back-N (compute check, & check seq # (if good ACK, else nothing))}

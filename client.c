@@ -255,8 +255,12 @@ void closeConnection(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDa
 }
 
 // Gets BUFFER_SIZE amount of data from file
-char * readFile(char *fileBuffer) {
-  return fgets(fileBuffer, BUFFER_SIZE, fileToTransfer);
+// char * readFile(char *fileBuffer) {
+//   return fgets(fileBuffer, BUFFER_SIZE, fileToTransfer);
+// }
+
+size_t readFile(char *fileBuffer) {
+  return fread((void*)fileBuffer, sizeof(char), BUFFER_SIZE, fileToTransfer);
 }
 
 // int u_char_array_len(u_char *array)
@@ -336,7 +340,9 @@ int main(int argc, char *argv[])
 
   //*** The client processes are ready to begin ***
 
-  while(readFile(fileBuffer) != NULL) {
+  size_t numRead = 0;
+
+  while(readFile(fileBuffer) > 0) {
     addData(sndDatagram, fileBuffer, BUFFER_SIZE);
     makeHeader(sndDatagram);
     //datagramlen(fileBuffer);
@@ -344,6 +350,7 @@ int main(int argc, char *argv[])
     verifyAck( getAck(&sockfd, &server_addr, &clientLen) );
     clearBuffers(sndDatagram, fileBuffer);    
   }
+
 
   //** End file sending **/
 
