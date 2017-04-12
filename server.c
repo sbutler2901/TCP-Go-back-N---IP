@@ -167,7 +167,7 @@ int verifySequence(uint32_t seqRecvd)
  *
  * Return: (int)bool - if the checksums matched
  **/
-int verifyChksum(u_char *recvdDatagram, uint16_t chkRecvd)
+int verifyChksum(u_char *recvdDatagram, uint16_t chkRecvd, int dGramSize)
 {
   uint32_t sum = 0;
   uint16_t calcdChk = 0;
@@ -176,7 +176,7 @@ int verifyChksum(u_char *recvdDatagram, uint16_t chkRecvd)
   recvdDatagram[4] = pseudoChksum >> 8;
   recvdDatagram[5] = pseudoChksum;
 
-  calcdChk = calcChecksum(recvdDatagram, BUFFER_SIZE, sum);
+  calcdChk = calcChecksum(recvdDatagram, dGramSize, sum);
   printf("Calc'd Chk: %u\n", (unsigned int)calcdChk);
 
   if (calcdChk == chkRecvd) {
@@ -255,9 +255,7 @@ int main(int argc, char *argv[])
     // Accepts a connection from the client and creates a new socket descriptor
     // to handle communication between the server and the client. 
     recsize = recvfrom(sockfd, (void*)recvdDatagram, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, &clientLen);
-    if (recsize < 0) {
-      error("ERROR on recvfrom");
-    }
+    if (recsize < 0) error("ERROR on recvfrom");
     printf("receivesize: %d\n", recsize);
 
     //Retrieve header
@@ -271,9 +269,9 @@ int main(int argc, char *argv[])
       break;
     }
 
-    if ( verifyChksum(recvdDatagram, chkRecvd) && verifySequence(seqRecvd) ) {
+    if ( verifyChksum(recvdDatagram, chkRecvd, recsize) && verifySequence(seqRecvd) ) {
       sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);
-      fwrite (&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
+      fwrite(&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
       // printf("Start Datagram data: \n");
       //printDGram(recvdDatagram, 100, 0);
       // printf("End Datagram data\n");

@@ -122,9 +122,10 @@ void addNewChksum(u_char *sndDatagram, uint16_t calcdChk)
  * Note: The checksum is computed on a header with the pseudo-checksum
  * in the header component for the checksum   
  **/
-void makeHeader(u_char *sndDatagram)
+void makeHeader(u_char *sndDatagram, int dGramLen)
 {
 
+  printf("dGramLen: %d\n", dGramLen+8);
   uint32_t sum=0, seqSend=0;
   uint16_t calcdChk=0, chkSend=0, dataSend=0;
 
@@ -139,7 +140,7 @@ void makeHeader(u_char *sndDatagram)
 
   //printDGram(sndDatagram, 15);
 
-  calcdChk = calcChecksum(sndDatagram, BUFFER_SIZE, sum);
+  calcdChk = calcChecksum(sndDatagram, dGramLen+8, sum);
 
   addNewChksum(sndDatagram, calcdChk);  
 
@@ -282,6 +283,8 @@ int main(int argc, char *argv[])
   winSize = atoi(argv[4]);
   maxSegSize = atoi(argv[5]);
 
+  if(maxSegSize > BUFFER_SIZE) maxSegSize = BUFFER_SIZE;  // Server is unaware of maxSegSize so this is a temp fix
+
   // It appears u_char & char are of size 1B
   int sndDataSize = (sizeof(u_char)*maxSegSize) + 8;
   int fileBufferSize = sizeof(char)*maxSegSize;
@@ -291,7 +294,7 @@ int main(int argc, char *argv[])
 
   u_char **goBackDgrams;
 
-  goBackDgrams = (u_char**) malloc(winSize * sizeof(u_char*));
+  goBackDgrams = (u_char**) malloc(winSize * sizeof(*goBackDgrams));
   if (goBackDgrams == NULL) error("Go back step 1 memory allocation failure\n");
   for(int i=0; i<winSize; i++) {
     goBackDgrams[i] = (u_char*) malloc(sndDataSize);
@@ -341,7 +344,7 @@ int main(int argc, char *argv[])
   numRead = readFile(fileBuffer, maxSegSize);
   while(numRead > 0) {
     addData(sndDatagram, fileBuffer, maxSegSize);
-    makeHeader(sndDatagram);
+    makeHeader(sndDatagram, maxSegSize);
 
     printf("Start fileBuffer\n");
     for(int i=0; i<maxSegSize; i++) {
@@ -382,6 +385,10 @@ int main(int argc, char *argv[])
 
   closeConnection(&sockfd, &server_addr, sndDatagram);  
   close(sockfd);
+  for(int i=0; i<winSize; i++) {
+    free(goBackDgrams[i]);
+  }
+  free(goBackDgrams);
   free(sndDatagram);
   free(fileBuffer);
   fclose(fileToTransfer);  
