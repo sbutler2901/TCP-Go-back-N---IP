@@ -262,7 +262,8 @@ size_t readFile(char *fileBuffer, size_t numToRead) {
 
 int main(int argc, char *argv[])
 {
-  int sockfd, portno, winSize, maxSegSize;    // The socket file descriptor, port number, and the number of chars read/written
+  int sockfd, portno, winSize;    // The socket file descriptor, port number, and the number of chars read/written
+  size_t maxSegSize;
   u_char *sndDatagram;      // The buffer storing each datagram before it is sent
   char *fileBuffer;         // Buffer storing the file data for each datagram
   struct sockaddr_in server_addr;             // Sockadder_in struct that stores the IP address, port, and etc of the server.
@@ -346,30 +347,30 @@ int main(int argc, char *argv[])
     addData(sndDatagram, fileBuffer, maxSegSize);
     makeHeader(sndDatagram, maxSegSize);
 
-    printf("Start fileBuffer\n");
-    for(int i=0; i<maxSegSize; i++) {
-      printf("%c", fileBuffer[i]);
-    }
-    printf("\nEnd fileBuffer\n\n");
+    // printf("Start fileBuffer\n");
+    // for(int i=0; i<maxSegSize; i++) {
+    //   printf("%c", fileBuffer[i]);
+    // }
+    // printf("\nEnd fileBuffer\n\n");
 
-    printf("Start sndDatagram\n");
-    printDGram(sndDatagram, maxSegSize, 0);
-    printf("\nEnd sndDatagram\n\n");
+    // printf("Start sndDatagram\n");
+    // printDGram(sndDatagram, maxSegSize, 0);
+    // printf("\nEnd sndDatagram\n\n");
 
     // Start - Store dGrams for possible retransmission
-    memset(goBackDgrams[goBackDgramPtr], 0, maxSegSize);  // To ensure previous data is not in buffer when hit last dGram to send
-    //memcpy(goBackDgrams[goBackDgramPtr], sndDatagram, maxSegSize);
-    for(size_t i = 0; i<numRead; i++) {
-        memcpy(&goBackDgrams[goBackDgramPtr][i], &fileBuffer[i], sizeof(char));
+    for(size_t i = 0; i<maxSegSize; i++) {
+      memset(&goBackDgrams[goBackDgramPtr][i], 0, sizeof(char));  // To ensure previous data is not in buffer when hit last dGram to send
+      if(i<numRead) memcpy(&goBackDgrams[goBackDgramPtr][i], &fileBuffer[i], sizeof(char));
     }
 
     // Start - testing
     printf("Start - goBackDgram[%d]\n", goBackDgramPtr);
-    for(int i=0; i<maxSegSize; i++) {
+    for(size_t i=0; i<maxSegSize; i++) {
       printf("%c", (char)goBackDgrams[goBackDgramPtr][i]);
     }
-    printf("\nEnd\n\n");
+    printf("\nEnd - goBackDgram\n\n");
     // End - testing
+
     goBackDgramPtr++;
     if(goBackDgramPtr == winSize) goBackDgramPtr = 0;
 
