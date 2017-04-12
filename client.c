@@ -89,19 +89,18 @@ uint16_t calcChecksum(u_char *sndDatagram, unsigned nbytes, uint32_t sum)
  * @buffer: The buffer the data is coming from
  * @buffDataLen: The length of the data in the buffer
  **/
-void addData(u_char *sndDatagram, char *buffer, int buffDataLen)
+void addData(u_char *sndDatagram, char *fileBuffer, size_t maxSegSize)
 {
-  int numBytes;
-
+  //int numBytes;
   // This will need improvement, but for now this is adequate
-  if (buffDataLen > BUFFER_SIZE - 8) {
-    numBytes = BUFFER_SIZE - 8;
-  } else {
-    numBytes = buffDataLen;
-  }
+  // if (buffDataLen > BUFFER_SIZE - 8) {
+  //   numBytes = BUFFER_SIZE - 8;
+  // } else {
+  //   numBytes = buffDataLen;
+  // }
 
-	memcpy(&sndDatagram[8], buffer, numBytes);
-  memset(buffer, 0, BUFFER_SIZE);      
+	memcpy(&sndDatagram[8], fileBuffer, maxSegSize);
+  //memset(fileBuffer, 0, maxSegSize);      
 }
 
 /**
@@ -204,10 +203,7 @@ uint32_t getAck(int *sockfd, struct sockaddr_in *server_addr, socklen_t *clientL
   u_char recvdDatagram[BUFFER_SIZE] = {0};    // Buffer for receiving datagram
 
   recsize = recvfrom(*sockfd, (void*)recvdDatagram, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, clientLen);
-  if (recsize < 0) {
-    error("ERROR on recvfrom");
-    exit(1);
-  }
+  if (recsize < 0) error("ERROR on recvfrom");
   printf("receivesize: %d\n", recsize);
 
   seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
@@ -227,10 +223,10 @@ uint32_t getAck(int *sockfd, struct sockaddr_in *server_addr, socklen_t *clientL
  * @sndDatagram: The datagram buffer to be nulled
  * @fileBuffer: The buffer storing the file's lines to be nulled
  **/
-void clearBuffers(u_char *sndDatagram, char *fileBuffer)
+void clearBuffers(u_char *sndDatagram, char *fileBuffer, size_t maxSegSize)
 {
-  memset(sndDatagram, 0, BUFFER_SIZE);
-  memset(fileBuffer, 0, BUFFER_SIZE);  
+  memset(sndDatagram, 0, maxSegSize);
+  memset(fileBuffer, 0, maxSegSize);  
 }
 
 /**
@@ -259,31 +255,15 @@ void closeConnection(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDa
 //   return fgets(fileBuffer, BUFFER_SIZE, fileToTransfer);
 // }
 
-size_t readFile(char *fileBuffer) {
-  return fread((void*)fileBuffer, sizeof(char), BUFFER_SIZE, fileToTransfer);
+size_t readFile(char *fileBuffer, size_t numToRead) {
+  return fread((void*)fileBuffer, sizeof(char), numToRead, fileToTransfer);
 }
-
-// int u_char_array_len(u_char *array)
-// {
-//    /* Initialize a unsigned char pointer here  */
-//   char *ptr = (char *)array;
-//   while(*ptr != '\0') {
-//     ptr++;
-//     printf("test\n");
-//   }
-//   printf("Dif: %ld\n", ptr - (char*)array);
-//   return ptr - (char*)array;
-//    /* A loop that starts at string_start and
-//     * is increment by one until it's value is zero,
-//     *e.g. while(*s!=0) or just simply while(*s) */
-//    /* Return the difference of the incremented pointer and the original pointer */  
-// }
 
 int main(int argc, char *argv[])
 {
   int sockfd, portno, winSize, maxSegSize;    // The socket file descriptor, port number, and the number of chars read/written
-  u_char sndDatagram[BUFFER_SIZE] = {0};      // The buffer storing each datagram before it is sent
-  char fileBuffer[BUFFER_SIZE] = {0};         // Buffer storing the file data for each datagram
+  u_char *sndDatagram;      // The buffer storing each datagram before it is sent
+  char *fileBuffer;         // Buffer storing the file data for each datagram
   struct sockaddr_in server_addr;             // Sockadder_in struct that stores the IP address, port, and etc of the server.
   socklen_t clientLen;                        // Stores the size of the clients sockaddr_in 
   struct hostent *server;                     // Hostent struct that keeps relevant host info. Such as official name and address family.
@@ -301,6 +281,27 @@ int main(int argc, char *argv[])
   file_name = argv[3];
   winSize = atoi(argv[4]);
   maxSegSize = atoi(argv[5]);
+
+  // It appears u_char & char are of size 1B
+  int sndDataSize = (sizeof(u_char)*maxSegSize) + 8;
+  int fileBufferSize = sizeof(char)*maxSegSize;
+  //int fileBufferSize = sizeof(char)*(winSize*maxSegSize);
+
+  //printf("snd: %d, file: %d\n", sndDataSize, fileBufferSize);
+
+  u_char **goBackDgrams;
+
+  goBackDgrams = (u_char**) malloc(winSize * sizeof(u_char*));
+  if (goBackDgrams == NULL) error("Go back step 1 memory allocation failure\n");
+  for(int i=0; i<winSize; i++) {
+    goBackDgrams[i] = (u_char*) malloc(sndDataSize);
+    if (goBackDgrams[i] == NULL) error("Go back step 2 memory allocation failure\n");
+  }
+
+  sndDatagram = (u_char*) malloc(sndDataSize);
+  fileBuffer = (char*) malloc(fileBufferSize);
+  if (sndDatagram == NULL) error("Datagram memory allocation failure\n");
+  if (fileBuffer == NULL) error("Filebuffer memory allocation failure\n");
 
   // AF_INET is for the IPv4 protocol. SOCK_STREAM represents a 
   // Stream Socket. 0 uses system default for transportation
@@ -321,34 +322,59 @@ int main(int argc, char *argv[])
   // Retrieves the host information based on the address
   // passed from the users commandline. 
   server = gethostbyname(argv[1]);
-  if (server == NULL) {
-    fprintf(stderr,"ERROR, no such host\n");
-    exit(1);
-  }
+  if (server == NULL) error("ERROR, no such host");
 
   // Copies the server info into the the appropriate socket struct. 
   bcopy((char *) server->h_addr, (char *) &server_addr.sin_addr.s_addr, server->h_length);
 
   fileToTransfer = fopen(argv[3], "r");
-
-  if(fileToTransfer == NULL) {
-    error("Error opening the file");
-    exit(1);
-  }
+  if(fileToTransfer == NULL) error("Error opening the file to tranfer");
 
   //*** Init - End ***
 
   //*** The client processes are ready to begin ***
 
   size_t numRead = 0;
+  //size_t numBytesIn = 0;
+  int goBackDgramPtr = 0;
 
-  while(readFile(fileBuffer) > 0) {
-    addData(sndDatagram, fileBuffer, BUFFER_SIZE);
+  numRead = readFile(fileBuffer, maxSegSize);
+  while(numRead > 0) {
+    addData(sndDatagram, fileBuffer, maxSegSize);
     makeHeader(sndDatagram);
-    //datagramlen(fileBuffer);
-    sendDatagram(&sockfd, &server_addr, sndDatagram, BUFFER_SIZE);  
+
+    printf("Start fileBuffer\n");
+    for(int i=0; i<maxSegSize; i++) {
+      printf("%c", fileBuffer[i]);
+    }
+    printf("\nEnd fileBuffer\n\n");
+
+    printf("Start sndDatagram\n");
+    printDGram(sndDatagram, maxSegSize, 0);
+    printf("\nEnd sndDatagram\n\n");
+
+    // Start - Store dGrams for possible retransmission
+    memset(goBackDgrams[goBackDgramPtr], 0, maxSegSize);  // To ensure previous data is not in buffer when hit last dGram to send
+    //memcpy(goBackDgrams[goBackDgramPtr], sndDatagram, maxSegSize);
+    for(size_t i = 0; i<numRead; i++) {
+        memcpy(&goBackDgrams[goBackDgramPtr][i], &fileBuffer[i], sizeof(char));
+    }
+
+    // Start - testing
+    printf("Start - goBackDgram[%d]\n", goBackDgramPtr);
+    for(int i=0; i<maxSegSize; i++) {
+      printf("%c", (char)goBackDgrams[goBackDgramPtr][i]);
+    }
+    printf("\nEnd\n\n");
+    // End - testing
+    goBackDgramPtr++;
+    if(goBackDgramPtr == winSize) goBackDgramPtr = 0;
+
+
+    sendDatagram(&sockfd, &server_addr, sndDatagram, numRead+8);  
     verifyAck( getAck(&sockfd, &server_addr, &clientLen) );
-    clearBuffers(sndDatagram, fileBuffer);    
+    clearBuffers(sndDatagram, fileBuffer, maxSegSize);
+    numRead = readFile(fileBuffer, maxSegSize); 
   }
 
 
@@ -356,6 +382,8 @@ int main(int argc, char *argv[])
 
   closeConnection(&sockfd, &server_addr, sndDatagram);  
   close(sockfd);
+  free(sndDatagram);
+  free(fileBuffer);
   fclose(fileToTransfer);  
 
   exit(0);

@@ -8,7 +8,11 @@
 \b0 \
 1. read data from file until achieve MSS then sent\
 2. Go-back-N: implement sending size N (less than N un acknowledged segements: send)\
-	a. N=1 : reduce to Stop & wait\
+	*Note. N=1 : reduce to Stop & wait\
+	a. read data from file until enough to send datagram.\
+	b. Upon sending datagram, it must be saved in case resending must be required\
+		1. datagram buffer should be cleared when it has been sent? (may transfer it elsewhere rather than simply keeping file data and recomputing header & etc for retransmission.\
+		2. When to clear filebuffer? \
 \
 
 \b Server:
