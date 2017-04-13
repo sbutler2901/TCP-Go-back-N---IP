@@ -15,7 +15,7 @@
 #include <sys/time.h>
 
 #define BUFFER_SIZE 256
-#define TIMEOUT 10000.0
+#define TIMEOUT 10.0
 
 const uint16_t pseudoChksum = 0b0000000000000000;
 const uint16_t ackFlag = 0b1010101010101010;
@@ -168,18 +168,18 @@ void makeHeader(u_char *sndDatagram, int dGramLen)
 int sendDatagram(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagram, int datagramLen)
 {
 
-  int sendsize = sendto(*sockfd, sndDatagram, datagramLen, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
+  int sendSize = sendto(*sockfd, sndDatagram, datagramLen, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   
-  if(sendsize < 0) {
+  if(sendSize < 0) {
     error("Error sending the packet:");
     exit(1);
   } else {
-    printf("sendsize: %d\n", sendsize);
+    printf("sendSize: %d\n", sendSize);
   }
 
   sequenceNumber++;
   if (sequenceNumber == USHRT_MAX) sequenceNumber = 0;    // refer to getAck()
-  return sendsize;
+  return sendSize;
 }
 
 /**
@@ -195,7 +195,10 @@ int verifyAck(uint32_t lastSeqACKd, uint32_t ackdSeqNum)
     printf("The received datagram was not an ACK\n\n");
     return 0;
   }
-  if(lastSeqACKd > ackdSeqNum) return 0;
+  if(lastSeqACKd > ackdSeqNum) {
+    printf("Testing\n");
+    return 0;
+  }
   printf("Seq # %u has been acknowledged\n\n", ackdSeqNum);
   return 1;
 }
@@ -297,11 +300,11 @@ int areThereACKs(int maxfd, fd_set *allset, fd_set *rset, struct timeval *timeou
 }
 
 void savePacket(u_char *sndDatagram, u_char **goBackDgrams, struct dGramLocation *dGramLocationArray, 
-  int goBackDgramPtr, size_t maxSegSize, size_t sendsize)
+  int goBackDgramPtr, size_t maxSegSize, size_t sendSize)
 {
  for(size_t i = 0; i<maxSegSize+8; i++) {
     memset(&goBackDgrams[goBackDgramPtr][i], 0, sizeof(u_char));  // To ensure previous data is not in buffer when hit last dGram to send
-    if(i<sendsize) memcpy(&goBackDgrams[goBackDgramPtr][i], &sndDatagram[i], sizeof(u_char));
+    if(i<sendSize) memcpy(&goBackDgrams[goBackDgramPtr][i], &sndDatagram[i], sizeof(u_char));
   }
 
   // Dup acks will be ignored, but refinement is required
@@ -323,15 +326,16 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
       memcpy(&sndDatagram[j], &goBackDgrams[i][j], sizeof(u_char));
       if(dGramLen == -1 && sndDatagram[j] == 0) dGramLen = j;
     }
-    /*int sendsize = */sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
+    /*int sendSize = */sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
     memset(sndDatagram, 0, maxSegSize+8);
   }
+  free(sndDatagram);
 }
 
 int main(int argc, char *argv[])
 {
   int sockfd, portno, winSize;    // The socket file descriptor, port number, and the number of chars read/written
-  size_t maxSegSize;
+  size_t maxSegSize, sendSize;
   u_char *sndDatagram;      // The buffer storing each datagram before it is sent
   char *fileBuffer;         // Buffer storing the file data for each datagram
   struct sockaddr_in server_addr;             // Sockadder_in struct that stores the IP address, port, and etc of the server.
@@ -339,6 +343,25 @@ int main(int argc, char *argv[])
   struct hostent *server;                     // Hostent struct that keeps relevant host info. Such as official name and address family.
   char *host_name, *file_name;                // The host name and file name retrieve from command line
   u_char **goBackDgrams;
+
+  size_t numRead = 0;
+  int goBackDgramPtr = 0;
+  int currentWin;
+
+  // START select() - Used by select() to poll if there are ACKs to be read
+  fd_set rset;              // File descriptors that might be ready to read
+  fd_set allset;            // Set of all file descriptors
+  int maxfd;                // Max file descriptor of sets (will need to be incremented by 1)
+  struct timeval timeout;   // Specifies how long select should wait. 0 for both elements == no block
+  timeout.tv_sec = 0;       // Represents the number of whole seconds of elapsed time
+  timeout.tv_usec = 0;      // The rest of the elapsed time (a fraction of a second), represented as the number of microseconds.
+  struct timeval timer;     // Tracks timeout for retransmission
+  timer.tv_sec = -1;
+  timer.tv_usec = -1;
+  // END
+
+  uint32_t lastSeqACKd = -1;
+  uint32_t acksSeq;
 
   if (argc < 6) {
     fprintf(stderr,"usage: %s hostname port file-name N MSS\n", argv[0]);
@@ -353,12 +376,13 @@ int main(int argc, char *argv[])
   winSize = atoi(argv[4]);
   maxSegSize = atoi(argv[5]);
 
+  currentWin = winSize;
+
   if(maxSegSize > BUFFER_SIZE) maxSegSize = BUFFER_SIZE;  // Server is unaware of maxSegSize so this is a temp fix
 
   // It appears u_char & char are of size 1B
   int sndDataSize = (sizeof(u_char)*maxSegSize) + 8;
   int fileBufferSize = sizeof(char)*maxSegSize;
-  //int fileBufferSize = sizeof(char)*(winSize*maxSegSize);
 
   //printf("snd: %d, file: %d\n", sndDataSize, fileBufferSize);
 
@@ -375,7 +399,6 @@ int main(int argc, char *argv[])
     dGramLocationArray[i].seqNum = -1;
   }
 
-
   sndDatagram = (u_char*) malloc(sndDataSize);
   fileBuffer = (char*) malloc(fileBufferSize);
   if (sndDatagram == NULL) error("Datagram memory allocation failure\n");
@@ -386,6 +409,11 @@ int main(int argc, char *argv[])
   // protocol. In this case will be UDP 
   sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if (sockfd < 0) error("ERROR opening socket");
+
+  maxfd = sockfd+1;  
+  FD_ZERO(&allset);         // Initialiazes
+  FD_SET(sockfd, &allset);  // Adds socket
+  rset = allset;            // initializes read set
 
   // Sets all variables in the server_addr struct to 0 to prevent "junk" 
   // in the variables. "Always pass structures by reference w/ the 
@@ -412,44 +440,19 @@ int main(int argc, char *argv[])
 
   //*** The client processes are ready to begin ***
 
-  size_t numRead = 0;
-  //size_t numBytesIn = 0;
-  int goBackDgramPtr = 0;
-  int currentWin = winSize;
-
-  //Select
-  fd_set rset;              // File descriptors that might be ready to read
-  fd_set allset;            // Set of all file descriptors
-  int maxfd;                // Max file descriptor of sets (will need to be incremented by 1)
-  //int nready;               // Total number of bits set in readfds, writefds and errorfds, or zero if the timeout expired, and -1 on error.
-  struct timeval timeout;   // Specifies how long select should wait. 0 == no block
-  struct timeval timer;     // Tracks timeout for retransmission
-
-  // Both set to 0 tells select not to time out
-  timeout.tv_sec = 0;       // Represents the number of whole seconds of elapsed time
-  timeout.tv_usec = 0;      // The rest of the elapsed time (a fraction of a second), represented as the number of microseconds.
-  timer.tv_sec = -1;
-  timer.tv_usec = -1;
-
-  maxfd = sockfd+1;  
-  FD_ZERO(&allset);         // Initialiazes
-  FD_SET(sockfd, &allset);  // Adds socket
-  rset = allset;            // initializes read set
-  // end
-
-  uint32_t lastSeqACKd = -1;
-  uint32_t acksSeq;
-
   while(1) {
     if(hasTimerExpired(&timer)) {
+      printf("Timer expired\n");
       resendDgrams(goBackDgrams, &sockfd, &server_addr, maxSegSize, goBackDgramPtr, sndDataSize, winSize);
       startTimer(&timer);
     }
     while(areThereACKs(maxfd, &allset, &rset, &timeout)) {
       acksSeq = getAck(&sockfd, &server_addr, &clientLen);
 
+      printf("\nHmmm\n");
       if(verifyAck(lastSeqACKd, acksSeq)) {
-        winSize++;
+        printf("\nThere was a successful ACK\n");
+        currentWin++;
         lastSeqACKd = acksSeq;
         startTimer(&timer);
       } 
@@ -465,16 +468,16 @@ int main(int argc, char *argv[])
       addData(sndDatagram, fileBuffer, maxSegSize);
       makeHeader(sndDatagram, maxSegSize);
 
-      size_t sendsize = sendDatagram(&sockfd, &server_addr, sndDatagram, numRead+8);  
+      sendSize = sendDatagram(&sockfd, &server_addr, sndDatagram, numRead+8);  
       clearBuffers(sndDatagram, fileBuffer, maxSegSize);
       // END - send packet
 
       // START - Save packet
-      savePacket(sndDatagram, goBackDgrams, dGramLocationArray, goBackDgramPtr, maxSegSize, sendsize);
+      savePacket(sndDatagram, goBackDgrams, dGramLocationArray, goBackDgramPtr, maxSegSize, sendSize);
       if(goBackDgramPtr == winSize) goBackDgramPtr = 0;
       // END - save packet
 
-      currentWin++;
+      currentWin--;
       if(timer.tv_sec == -1) startTimer(&timer);  // First loop: timer has never been started
     }
   }
