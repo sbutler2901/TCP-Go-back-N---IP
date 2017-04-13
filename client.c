@@ -357,8 +357,7 @@ int main(int argc, char *argv[])
   u_char **goBackDgrams;
 
   size_t numRead = 0;
-  int goBackDgramPtr = 0;
-  int currentWin;
+  int goBackDgramPtr = 0, currentWin, sndDataSize, fileBufferSize;
 
   // START select() - Used by select() to poll if there are ACKs to be read
   fd_set rset;              // File descriptors that might be ready to read
@@ -393,8 +392,8 @@ int main(int argc, char *argv[])
   if(maxSegSize > BUFFER_SIZE) maxSegSize = BUFFER_SIZE;  // Server is unaware of maxSegSize so this is a temp fix
 
   // It appears u_char & char are of size 1B
-  int sndDataSize = (sizeof(u_char)*maxSegSize) + 8;
-  int fileBufferSize = sizeof(char)*maxSegSize;
+  sndDataSize = (sizeof(u_char)*maxSegSize) + 8;
+  fileBufferSize = sizeof(char)*maxSegSize;
 
   //printf("snd: %d, file: %d\n", sndDataSize, fileBufferSize);
 
