@@ -183,20 +183,20 @@ int sendDatagram(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagr
 }
 
 /**
- * verifyAck - verifys the ACK'd seq # received from the server
+ * verifyACK - verifys the ACK'd seq # received from the server
  * @ackdSeqNum: The sequence # received in the ACK
  *
  * Note: If the sequence number is USHRT_MAX then the datagram received was not
  * an ACK.
  **/
-int verifyAck(uint32_t lastSeqACKd, uint32_t ackdSeqNum)
+int verifyACK(uint32_t lastSeqACKd, uint32_t ackdSeqNum)
 {
   if (ackdSeqNum == USHRT_MAX) { 
     printf("The received datagram was not an ACK\n\n");
     return 0;
   }
   if(lastSeqACKd > ackdSeqNum) {
-    printf("Testing\n");
+    printf("lastACKd= %d, recentACK= %d\n", lastSeqACKd, ackdSeqNum);
     return 0;
   }
   printf("Seq # %u has been acknowledged\n\n", ackdSeqNum);
@@ -300,7 +300,7 @@ int areThereACKs(int maxfd, fd_set *allset, fd_set *rset, struct timeval *timeou
 }
 
 void savePacket(u_char *sndDatagram, u_char **goBackDgrams, struct dGramLocation *dGramLocationArray, 
-  int goBackDgramPtr, size_t maxSegSize, size_t sendSize)
+  int goBackDgramPtr, size_t maxSegSize)
 {
  for(size_t i = 0; i<maxSegSize+8; i++) {
     //memset(&goBackDgrams[goBackDgramPtr][i], 0, sizeof(u_char));  // To ensure previous data is not in buffer when hit last dGram to send
@@ -372,7 +372,7 @@ int main(int argc, char *argv[])
   timer.tv_usec = -1;
   // END
 
-  uint32_t lastSeqACKd = -1;
+  uint32_t lastSeqACKd = 0;
   uint32_t acksSeq;
 
   if (argc < 6) {
@@ -461,9 +461,7 @@ int main(int argc, char *argv[])
     while(areThereACKs(maxfd, &allset, &rset, &timeout)) {
       acksSeq = getAck(&sockfd, &server_addr, &clientLen);
 
-      //printf("\nHmmm\n");
-      if(verifyAck(lastSeqACKd, acksSeq)) {
-        printf("\nThere was a successful ACK\n");
+      if(verifyACK(lastSeqACKd, acksSeq)) {
         currentWin++;
         lastSeqACKd = acksSeq;
         startTimer(&timer);
@@ -481,7 +479,7 @@ int main(int argc, char *argv[])
       makeHeader(sndDatagram, maxSegSize);
 
       // START - Save packet
-      savePacket(sndDatagram, goBackDgrams, dGramLocationArray, goBackDgramPtr, maxSegSize, maxSegSize+8);
+      savePacket(sndDatagram, goBackDgrams, dGramLocationArray, goBackDgramPtr, maxSegSize);
       goBackDgramPtr++;
       if(goBackDgramPtr == winSize) goBackDgramPtr = 0;
       // END - save packet
