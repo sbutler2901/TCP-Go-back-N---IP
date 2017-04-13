@@ -8,7 +8,7 @@ server: server.c
 	$(CC) $(CFLAGS) -o server server.c 
 
 c:
-	./client localhost 9999 cFile 4 25
+	./client localhost 9999 cFile 4 20
 
 s:
 	./server 9999 sFile 0.5

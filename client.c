@@ -131,8 +131,6 @@ void addNewChksum(u_char *sndDatagram, uint16_t calcdChk)
  **/
 void makeHeader(u_char *sndDatagram, int dGramLen)
 {
-
-  printf("dGramLen: %d\n", dGramLen+8);
   uint32_t sum=0, seqSend=0;
   uint16_t calcdChk=0, chkSend=0, dataSend=0;
 
@@ -169,13 +167,9 @@ int sendDatagram(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagr
 {
 
   int sendSize = sendto(*sockfd, sndDatagram, datagramLen, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
+  if(sendSize < 0) error("Error sending the packet:");
   
-  if(sendSize < 0) {
-    error("Error sending the packet:");
-    exit(1);
-  } else {
-    printf("sendSize: %d\n", sendSize);
-  }
+  printf("sendSize: %d\n", sendSize);
 
   sequenceNumber++;
   if (sequenceNumber == USHRT_MAX) sequenceNumber = 0;    // refer to getAck()
@@ -323,23 +317,16 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
   int tmp = 0;
   for(int i = goBackDgramPtr; tmp < winSize; i++) {
     if(i >= winSize) i = 0;
-
     for(size_t j = 0; j<maxSegSize+8; j++) {
-      //memcpy(&sndDatagram[j], &goBackDgrams[i][j], sizeof(u_char));      
       sndDatagram[j] = goBackDgrams[i][j];
-      if(dGramLen == -1 && j>= 8 && sndDatagram[j] == 0) {
-        dGramLen = j;
-        printf("dGramLen = %d\n", dGramLen);
-      }
+      if(dGramLen == -1 && j>=8 && sndDatagram[j] == 0) dGramLen = j;
     }
     if(dGramLen == -1) dGramLen = maxSegSize+8;
 
-    //printDGram(sndDatagram, maxSegSize+8, 1);
-
-    //printDGram(goBackDgrams[i], maxSegSize+8, 1);
-    /*int sendSize = */sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
+    sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
     memset(sndDatagram, 0, maxSegSize+8);
     tmp++;
+    dGramLen = -1;
   }
   free(sndDatagram);
 }
