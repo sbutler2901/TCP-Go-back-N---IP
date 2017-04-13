@@ -1,4 +1,0 @@
-  //memcpy(&sndDatagram[8], "Dog", 3);  // Add data
-  // addData("Dog", 3);
-  // makeHeader();    
- 

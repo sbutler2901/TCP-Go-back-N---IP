@@ -15,7 +15,7 @@
 #include <sys/time.h>
 
 #define BUFFER_SIZE 256
-#define TIMEOUT 7.0
+#define TIMEOUT 3.0
 
 const uint16_t pseudoChksum = 0b0000000000000000;
 const uint16_t ackFlag = 0b1010101010101010;
@@ -303,20 +303,20 @@ void savePacket(u_char *sndDatagram, u_char **goBackDgrams, struct dGramLocation
   int goBackDgramPtr, size_t maxSegSize, size_t sendSize)
 {
  for(size_t i = 0; i<maxSegSize+8; i++) {
-    memset(&goBackDgrams[goBackDgramPtr][i], 0, sizeof(u_char));  // To ensure previous data is not in buffer when hit last dGram to send
-    if(i<sendSize) memcpy(&goBackDgrams[goBackDgramPtr][i], &sndDatagram[i], sizeof(u_char));
+    //memset(&goBackDgrams[goBackDgramPtr][i], 0, sizeof(u_char));  // To ensure previous data is not in buffer when hit last dGram to send
+    //if(i<sendSize) {
+      //memcpy(&goBackDgrams[goBackDgramPtr][i], &sndDatagram[i], sizeof(u_char));
+      goBackDgrams[goBackDgramPtr][i] = sndDatagram[i];
+    //}
   }
 
   // Dup acks will be ignored, but refinement is required
   dGramLocationArray[goBackDgramPtr].seqNum = sequenceNumber;
-
-  goBackDgramPtr++;
 }
 
 void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server_addr, size_t maxSegSize, int goBackDgramPtr, int sndDataSize, int winSize)
 {
-  u_char *sndDatagram = (u_char*) malloc(sndDataSize);
-  memset(sndDatagram, 0, maxSegSize+8);
+  u_char *sndDatagram = (u_char*) calloc(sndDataSize, sizeof(u_char));
   if (sndDatagram == NULL) error("Datagram memory allocation failure\n");
   int dGramLen = -1;
 
@@ -325,14 +325,18 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
     if(i >= winSize) i = 0;
 
     for(size_t j = 0; j<maxSegSize+8; j++) {
-      memcpy(&sndDatagram[j], &goBackDgrams[i][j], sizeof(u_char));
-      printf("%c", (char)goBackDgrams[i][j]);
-      if(dGramLen == -1 && sndDatagram[j] == 0) {
+      //memcpy(&sndDatagram[j], &goBackDgrams[i][j], sizeof(u_char));      
+      sndDatagram[j] = goBackDgrams[i][j];
+      if(dGramLen == -1 && j>= 8 && sndDatagram[j] == 0) {
         dGramLen = j;
         printf("dGramLen = %d\n", dGramLen);
       }
     }
-    printDGram(sndDatagram, maxSegSize+8, 0);
+    if(dGramLen == -1) dGramLen = maxSegSize+8;
+
+    //printDGram(sndDatagram, maxSegSize+8, 1);
+
+    //printDGram(goBackDgrams[i], maxSegSize+8, 1);
     /*int sendSize = */sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
     memset(sndDatagram, 0, maxSegSize+8);
     tmp++;
@@ -457,7 +461,7 @@ int main(int argc, char *argv[])
     while(areThereACKs(maxfd, &allset, &rset, &timeout)) {
       acksSeq = getAck(&sockfd, &server_addr, &clientLen);
 
-      printf("\nHmmm\n");
+      //printf("\nHmmm\n");
       if(verifyAck(lastSeqACKd, acksSeq)) {
         printf("\nThere was a successful ACK\n");
         currentWin++;
@@ -476,14 +480,15 @@ int main(int argc, char *argv[])
       addData(sndDatagram, fileBuffer, maxSegSize);
       makeHeader(sndDatagram, maxSegSize);
 
+      // START - Save packet
+      savePacket(sndDatagram, goBackDgrams, dGramLocationArray, goBackDgramPtr, maxSegSize, maxSegSize+8);
+      goBackDgramPtr++;
+      if(goBackDgramPtr == winSize) goBackDgramPtr = 0;
+      // END - save packet
+
       sendSize = sendDatagram(&sockfd, &server_addr, sndDatagram, numRead+8);  
       clearBuffers(sndDatagram, fileBuffer, maxSegSize);
       // END - send packet
-
-      // START - Save packet
-      savePacket(sndDatagram, goBackDgrams, dGramLocationArray, goBackDgramPtr, maxSegSize, sendSize);
-      if(goBackDgramPtr == winSize) goBackDgramPtr = 0;
-      // END - save packet
 
       currentWin--;
       if(timer.tv_sec == -1) startTimer(&timer);  // First loop: timer has never been started

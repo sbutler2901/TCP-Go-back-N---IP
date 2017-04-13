@@ -155,7 +155,7 @@ int verifySequence(uint32_t seqRecvd)
 
     return 1;
   } else {
-    printf("The sequence # was not as expected\n");
+    printf("The sequence # was not as expected: recvd=%d, expect=%d\n", seqRecvd, sequenceNumberExpected);
     return 0;    
   }
 }
@@ -270,16 +270,17 @@ int main(int argc, char *argv[])
     }
 
     if ( verifyChksum(recvdDatagram, chkRecvd, recsize) && verifySequence(seqRecvd) ) {
-      //sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);
+      sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);
       fwrite(&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
       // printf("Start Datagram data: \n");
       //printDGram(recvdDatagram, 100, 0);
       // printf("End Datagram data\n");
 
-    } else { 
-      //printDGram(&recvdDatagram[8], recsize-8);
-      break;
-    }
+    } 
+    // else { 
+    //   //printDGram(&recvdDatagram[8], recsize-8);
+    //   break;
+    // }
 
     clearBuffers(recvdDatagram, ackDatagram);
   }
