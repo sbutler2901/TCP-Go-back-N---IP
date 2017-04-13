@@ -14,6 +14,10 @@
 		1. datagram buffer should be cleared when it has been sent? (may transfer it elsewhere rather than simply keeping file data and recomputing header & etc for retransmission.\
 		2. When to clear filebuffer? \
 \
+	a. if num ACKd < N then send the next one also storing this datagram\
+	b. else retransmit dGrams start at one that hasn\'92t been acked\
+	c. Must have ptr to track earliest dGram that hasn\'92t been ACKd, current window size, & ptr to determine where to store the next dGram to be sent.\
+\
 
 \b Server:
 \b0 \
@@ -23,4 +27,7 @@
 \i r
 \i0 . If 
 \i r
-\i0  <= p, discard packet (no ack), else process according to Go-back-N (compute check, & check seq # (if good ACK, else nothing))}
+\i0  <= p, discard packet (no ack), else process according to Go-back-N (compute check, & check seq # (if good ACK, else nothing))\
+\
+\
+must keep track of last seq number ackd, the datagram\'92s index in the goBack array,}
