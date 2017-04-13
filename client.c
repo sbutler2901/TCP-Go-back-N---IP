@@ -15,7 +15,7 @@
 #include <sys/time.h>
 
 #define BUFFER_SIZE 256
-#define TIMEOUT 10.0
+#define TIMEOUT 7.0
 
 const uint16_t pseudoChksum = 0b0000000000000000;
 const uint16_t ackFlag = 0b1010101010101010;
@@ -313,21 +313,29 @@ void savePacket(u_char *sndDatagram, u_char **goBackDgrams, struct dGramLocation
   goBackDgramPtr++;
 }
 
-void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server_addr, size_t maxSegSize, int goBackDgramPtr, int sndDataSize,int winSize)
+void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server_addr, size_t maxSegSize, int goBackDgramPtr, int sndDataSize, int winSize)
 {
   u_char *sndDatagram = (u_char*) malloc(sndDataSize);
+  memset(sndDatagram, 0, maxSegSize+8);
   if (sndDatagram == NULL) error("Datagram memory allocation failure\n");
   int dGramLen = -1;
 
-  for(int i = goBackDgramPtr-1; i != goBackDgramPtr; i--) {
-    if(i<0) i = winSize-1;
+  int tmp = 0;
+  for(int i = goBackDgramPtr; tmp < winSize; i++) {
+    if(i >= winSize) i = 0;
 
     for(size_t j = 0; j<maxSegSize+8; j++) {
       memcpy(&sndDatagram[j], &goBackDgrams[i][j], sizeof(u_char));
-      if(dGramLen == -1 && sndDatagram[j] == 0) dGramLen = j;
+      printf("%c", (char)goBackDgrams[i][j]);
+      if(dGramLen == -1 && sndDatagram[j] == 0) {
+        dGramLen = j;
+        printf("dGramLen = %d\n", dGramLen);
+      }
     }
+    printDGram(sndDatagram, maxSegSize+8, 0);
     /*int sendSize = */sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
     memset(sndDatagram, 0, maxSegSize+8);
+    tmp++;
   }
   free(sndDatagram);
 }
