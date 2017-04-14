@@ -14,8 +14,9 @@
 #include <limits.h>
 #include <sys/time.h>
 
+// Represents the max the MSS can be - (The server would require larger buffers or handle fragmentation
 #define BUFFER_SIZE 256
-#define TIMEOUT 3.0
+#define TIMEOUT 3.0		// The retranmission timer's timeout
 
 const uint16_t pseudoChksum = 0b0000000000000000;
 const uint16_t ackFlag = 0b1010101010101010;
@@ -25,7 +26,10 @@ uint32_t sequenceNumber = 0;
 
 FILE *fileToTransfer;
 
-// Prints the error message passed. 
+/**
+* error - prints the value of errno & exit
+* @msg: The specific message to preceed the error
+**/
 void error(const char *msg)
 {
   perror(msg);
@@ -41,9 +45,9 @@ void error(const char *msg)
  **/
 void printDGram(u_char *dGram, int dGramLen, uint8_t withIndicies)
 {
-  // Prints the header
   for (int i=0; i < dGramLen + 8; i++) {
     if (i < 8) {
+		  // Prints the header
       printf("dGram[%d]: %u\n", i, (unsigned int)dGram[i]);      
     } else {
       if(withIndicies > 0) printf("dGram[%d]: %c\n", i, (char)dGram[i]);
@@ -153,10 +157,7 @@ int sendDatagram(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagr
   int sendSize = sendto(*sockfd, sndDatagram, datagramLen, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   if(sendSize < 0) error("Error sending the packet:");
   
-  printf("sendSize: %d\n", sendSize);
-
-  sequenceNumber++;
-  if (sequenceNumber == USHRT_MAX) sequenceNumber = 0;    // refer to getAck()
+  //printf("sendSize: %d\n", sendSize);
   return sendSize;
 }
 
@@ -246,19 +247,31 @@ void closeConnection(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDa
   sendDatagram(sockfd, server_addr, sndDatagram, 8);
 }
 
-// Gets BUFFER_SIZE amount of data from file
-// char * readFile(char *fileBuffer) {
-//   return fgets(fileBuffer, BUFFER_SIZE, fileToTransfer);
-// }
-
+/**
+ * readFile - reads from the file and stores it in the file buffer
+ * @fileBuffer - the buffer to store the read contents
+ * @numToRead - the number of char sized bytes to read
+ *
+ * Return size_t - the number successfully read
+ **/
 size_t readFile(char *fileBuffer, size_t numToRead) {
   return fread((void*)fileBuffer, sizeof(char), numToRead, fileToTransfer);
 }
 
+/**
+ * startTimer - starts the timer for retransmission
+ * @timer - the timer being initialized
+ **/ 
 void startTimer(struct timeval *timer) {
   if(gettimeofday(timer, NULL) != 0) error("ERROR: gettimeofday failed");
 }
 
+/**
+ * hasTimerExpired - determines if the timer has exceeded the timeout
+ * @timer - the timer being evaluated
+ *
+ * Return int - 1 if it has expired, 0 otherwise
+ **/
 int hasTimerExpired(struct timeval *timer)
 {
   struct timeval currentTime;
@@ -269,6 +282,15 @@ int hasTimerExpired(struct timeval *timer)
   return 0;
 }
 
+/**
+ * areThereACKs - polls to see if there are ACKs that have been received
+ * @maxfd - the maximum file descriptor size in rset
+ * @allset - all possible file descriptors for reading & writing
+ * @rset - the set of file descriptors to be checked for possible ACKs
+ * @timeout - how long select should poll for ACKS - 0 == none blocking
+ *
+ * Return - The number for file descriptors ready for reading
+ **/
 int areThereACKs(int maxfd, fd_set *allset, fd_set *rset, struct timeval *timeout)
 {
 	int nready;
@@ -279,6 +301,13 @@ int areThereACKs(int maxfd, fd_set *allset, fd_set *rset, struct timeval *timeou
   return nready;
 }
 
+/**
+ * savePacket - saves an non ACKd packet for possible retransmission
+ * @sndDatagram - the packet to be saved
+ * @goBackDgram - the buffers storing the saved sndDatagrams
+ * @goBackDgramPtr - where the current packet should be saved in the buffers
+ * @maxSegsize - the maximum amount of data stored in the datagram
+ **/
 void savePacket(u_char *sndDatagram, u_char **goBackDgrams, int goBackDgramPtr, size_t maxSegSize)
 {
  for(size_t i = 0; i<maxSegSize+8; i++) {
@@ -286,6 +315,16 @@ void savePacket(u_char *sndDatagram, u_char **goBackDgrams, int goBackDgramPtr, 
   }
 }
 
+/**
+ * resendDgrams - resends all saved datagrams that have yet to be ACKd
+ * @goBackDgrams - the buffers storing the datagrams to be resent
+ * @sockfd - the socket file descriptor
+ * @server_addr - the server socket information
+ * @maxSegSize - the maximum amount of data stored in a datagram
+ * @goBackDgraPtr - the next buffer to be replaced (The earliest saved buffer that hasn't been ACKd)
+ * @sndDatasize - the size of a send datagram buffer
+ * @winSize - the number of buffers saved before being replaced
+ **/
 void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server_addr, size_t maxSegSize, int goBackDgramPtr, int sndDataSize, int winSize)
 {
 	int i, dGramLen = -1, numResent = 0;
@@ -301,6 +340,10 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
       if(dGramLen == -1 && j>=8 && sndDatagram[j] == 0) dGramLen = j;
     }
     if(dGramLen == -1) dGramLen = maxSegSize+8;
+
+    int seqSend = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
+
+    printf("Seq resent: %d\n", seqSend);
 
     sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
     memset(sndDatagram, 0, maxSegSize+8);
@@ -443,6 +486,9 @@ int main(int argc, char *argv[])
       sendSize = sendDatagram(&sockfd, &server_addr, sndDatagram, numRead+8);  
       clearBuffers(sndDatagram, fileBuffer, maxSegSize);
       // END - send packet
+
+      sequenceNumber++;
+		  if (sequenceNumber == USHRT_MAX) sequenceNumber = 0;    // refer to getAck()
 
       currentWin--;
       if(timer.tv_sec == -1) startTimer(&timer);  // First loop: timer has never been started
