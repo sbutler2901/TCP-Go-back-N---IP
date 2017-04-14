@@ -25,11 +25,6 @@ uint32_t sequenceNumber = 0;
 
 FILE *fileToTransfer;
 
-struct dGramLocation {
-  uint32_t seqNum;
-  //int goBackDgramPtr;
-} dGramLocation;
-
 // Prints the error message passed. 
 void error(const char *msg)
 {
@@ -98,16 +93,7 @@ uint16_t calcChecksum(u_char *sndDatagram, unsigned nbytes, uint32_t sum)
  **/
 void addData(u_char *sndDatagram, char *fileBuffer, size_t maxSegSize)
 {
-  //int numBytes;
-  // This will need improvement, but for now this is adequate
-  // if (buffDataLen > BUFFER_SIZE - 8) {
-  //   numBytes = BUFFER_SIZE - 8;
-  // } else {
-  //   numBytes = buffDataLen;
-  // }
-
 	memcpy(&sndDatagram[8], fileBuffer, maxSegSize);
-  //memset(fileBuffer, 0, maxSegSize);      
 }
 
 /**
@@ -142,8 +128,6 @@ void makeHeader(u_char *sndDatagram, int dGramLen)
   sndDatagram[5] = pseudoChksum;
   sndDatagram[6] = dataFlag >> 8;
   sndDatagram[7] = dataFlag;
-
-  //printDGram(sndDatagram, 15);
 
   calcdChk = calcChecksum(sndDatagram, dGramLen+8, sum);
 
@@ -287,37 +271,32 @@ int hasTimerExpired(struct timeval *timer)
 
 int areThereACKs(int maxfd, fd_set *allset, fd_set *rset, struct timeval *timeout)
 {
+	int nready;
+
   *rset = *allset;    // needs to be reset each time
-  int nready = select( maxfd, rset, NULL, NULL,  timeout);
+  nready = select( maxfd, rset, NULL, NULL,  timeout);
   if(nready < 0) error("ERROR: select failed");
   return nready;
 }
 
-void savePacket(u_char *sndDatagram, u_char **goBackDgrams, struct dGramLocation *dGramLocationArray, 
-  int goBackDgramPtr, size_t maxSegSize)
+void savePacket(u_char *sndDatagram, u_char **goBackDgrams, int goBackDgramPtr, size_t maxSegSize)
 {
  for(size_t i = 0; i<maxSegSize+8; i++) {
-    //memset(&goBackDgrams[goBackDgramPtr][i], 0, sizeof(u_char));  // To ensure previous data is not in buffer when hit last dGram to send
-    //if(i<sendSize) {
-      //memcpy(&goBackDgrams[goBackDgramPtr][i], &sndDatagram[i], sizeof(u_char));
-      goBackDgrams[goBackDgramPtr][i] = sndDatagram[i];
-    //}
+    goBackDgrams[goBackDgramPtr][i] = sndDatagram[i];
   }
-
-  // Dup acks will be ignored, but refinement is required
-  dGramLocationArray[goBackDgramPtr].seqNum = sequenceNumber;
 }
 
 void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server_addr, size_t maxSegSize, int goBackDgramPtr, int sndDataSize, int winSize)
 {
+	int i, dGramLen = -1, numResent = 0;
+	size_t j;
   u_char *sndDatagram = (u_char*) calloc(sndDataSize, sizeof(u_char));
-  if (sndDatagram == NULL) error("Datagram memory allocation failure\n");
-  int dGramLen = -1;
 
-  int tmp = 0;
-  for(int i = goBackDgramPtr; tmp < winSize; i++) {
+  if (sndDatagram == NULL) error("Datagram memory allocation failure\n");
+
+  for(i = goBackDgramPtr; numResent < winSize; i++) {
     if(i >= winSize) i = 0;
-    for(size_t j = 0; j<maxSegSize+8; j++) {
+    for(j = 0; j<maxSegSize+8; j++) {
       sndDatagram[j] = goBackDgrams[i][j];
       if(dGramLen == -1 && j>=8 && sndDatagram[j] == 0) dGramLen = j;
     }
@@ -325,7 +304,7 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
 
     sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
     memset(sndDatagram, 0, maxSegSize+8);
-    tmp++;
+    numResent++;
     dGramLen = -1;
   }
   free(sndDatagram);
@@ -333,8 +312,9 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
 
 int main(int argc, char *argv[])
 {
-  int sockfd, portno, winSize;    // The socket file descriptor, port number, and the number of chars read/written
-  size_t maxSegSize, sendSize;
+	// The socket file descriptor, port number, and the number of chars read/written
+  int sockfd, portno, winSize, currentWin, sndDataSize, fileBufferSize, goBackDgramPtr = 0;    
+  size_t maxSegSize, sendSize, numRead = 0;
   u_char *sndDatagram;      // The buffer storing each datagram before it is sent
   char *fileBuffer;         // Buffer storing the file data for each datagram
   struct sockaddr_in server_addr;             // Sockadder_in struct that stores the IP address, port, and etc of the server.
@@ -342,9 +322,7 @@ int main(int argc, char *argv[])
   struct hostent *server;                     // Hostent struct that keeps relevant host info. Such as official name and address family.
   char *host_name, *file_name;                // The host name and file name retrieve from command line
   u_char **goBackDgrams;
-
-  size_t numRead = 0;
-  int goBackDgramPtr = 0, currentWin, sndDataSize, fileBufferSize;
+  uint32_t lastSeqACKd = 0, acksSeq;
 
   // START select() - Used by select() to poll if there are ACKs to be read
   fd_set rset;              // File descriptors that might be ready to read
@@ -357,9 +335,6 @@ int main(int argc, char *argv[])
   timer.tv_sec = -1;
   timer.tv_usec = -1;
   // END
-
-  uint32_t lastSeqACKd = 0;
-  uint32_t acksSeq;
 
   if (argc < 6) {
     fprintf(stderr,"usage: %s hostname port file-name N MSS\n", argv[0]);
@@ -390,11 +365,6 @@ int main(int argc, char *argv[])
   for(int i=0; i<winSize; i++) {
     goBackDgrams[i] = (u_char*) malloc(sndDataSize);
     if (goBackDgrams[i] == NULL) error("Go back step 2 memory allocation failure\n");
-  }
-
-  struct dGramLocation *dGramLocationArray = malloc (winSize * sizeof (dGramLocation));
-  for(int i=0; i<winSize; i++) {
-    dGramLocationArray[i].seqNum = -1;
   }
 
   sndDatagram = (u_char*) malloc(sndDataSize);
@@ -465,7 +435,7 @@ int main(int argc, char *argv[])
       makeHeader(sndDatagram, maxSegSize);
 
       // START - Save packet
-      savePacket(sndDatagram, goBackDgrams, dGramLocationArray, goBackDgramPtr, maxSegSize);
+      savePacket(sndDatagram, goBackDgrams, goBackDgramPtr, maxSegSize);
       goBackDgramPtr++;
       if(goBackDgramPtr == winSize) goBackDgramPtr = 0;
       // END - save packet
@@ -489,6 +459,5 @@ int main(int argc, char *argv[])
   free(sndDatagram);
   free(fileBuffer);
   fclose(fileToTransfer);  
-
   exit(0);
 }
