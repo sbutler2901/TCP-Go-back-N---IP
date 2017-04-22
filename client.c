@@ -15,8 +15,8 @@
 #include <sys/time.h>
 
 // Represents the max the MSS can be - (The server would require larger buffers or handle fragmentation
-#define BUFFER_SIZE 256
-#define TIMEOUT 3.0		// The retranmission timer's timeout
+#define BUFFER_SIZE 500
+#define TIMEOUT 6.0		// The retranmission timer's timeout
 
 const uint16_t pseudoChksum = 0b0000000000000000;
 const uint16_t ackFlag = 0b1010101010101010;
@@ -47,8 +47,8 @@ void printDGram(u_char *dGram, int dGramLen, uint8_t withIndicies)
 {
   for (int i=0; i < dGramLen + 8; i++) {
     if (i < 8) {
-		  // Prints the header
-      printf("dGram[%d]: %u\n", i, (unsigned int)dGram[i]);      
+	// Prints the header
+	printf("dGram[%d]: %u\n", i, (unsigned int)dGram[i]);      
     } else {
       if(withIndicies > 0) printf("dGram[%d]: %c\n", i, (char)dGram[i]);
       else printf("%c", (char)dGram[i]);
@@ -163,6 +163,7 @@ int sendDatagram(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagr
 
 /**
  * verifyACK - verifys the ACK'd seq # received from the server
+ * @lastSeqACKd: The last sequence # ACKd
  * @ackdSeqNum: The sequence # received in the ACK
  *
  * Note: If the sequence number is USHRT_MAX then the datagram received was not
@@ -356,7 +357,7 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
 int main(int argc, char *argv[])
 {
 	// The socket file descriptor, port number, and the number of chars read/written
-  int sockfd, portno, winSize, currentWin, sndDataSize, fileBufferSize, goBackDgramPtr = 0;    
+  int sockfd, portno, winSize, currentWin, sndDataSize, fileBufferSize, goBackDgramPtr = 0, noMoreData = 0;
   size_t maxSegSize, sendSize, numRead = 0;
   u_char *sndDatagram;      // The buffer storing each datagram before it is sent
   char *fileBuffer;         // Buffer storing the file data for each datagram
@@ -365,7 +366,7 @@ int main(int argc, char *argv[])
   struct hostent *server;                     // Hostent struct that keeps relevant host info. Such as official name and address family.
   char *host_name, *file_name;                // The host name and file name retrieve from command line
   u_char **goBackDgrams;
-  uint32_t lastSeqACKd = 0, acksSeq;
+  uint32_t lastSeqACKd = 0, acksSeq, lastSeqSent=-1;
 
   // START select() - Used by select() to poll if there are ACKs to be read
   fd_set rset;              // File descriptors that might be ready to read
@@ -452,6 +453,10 @@ int main(int argc, char *argv[])
   //*** The client processes are ready to begin ***
 
   while(1) {
+    if(noMoreData && lastSeqACKd == lastSeqSent) {
+      printf("There is no more data to send\n");
+      break;
+    }
     if(hasTimerExpired(&timer)) {
       printf("Timer expired\n");
       resendDgrams(goBackDgrams, &sockfd, &server_addr, maxSegSize, goBackDgramPtr, sndDataSize, winSize);
@@ -466,13 +471,10 @@ int main(int argc, char *argv[])
         startTimer(&timer);
       } 
     }
-    if(currentWin > 0) {
+    if(currentWin > 0 && noMoreData == 0) {
       // START - Send packet
       numRead = readFile(fileBuffer, maxSegSize);
-      if(numRead <= 0) {
-        printf("There is no more data to send\n");
-        break;
-      }
+      if(numRead <= 0) noMoreData = 1;
 
       addData(sndDatagram, fileBuffer, maxSegSize);
       makeHeader(sndDatagram, maxSegSize);
@@ -487,6 +489,7 @@ int main(int argc, char *argv[])
       clearBuffers(sndDatagram, fileBuffer, maxSegSize);
       // END - send packet
 
+      lastSeqSent = sequenceNumber;
       sequenceNumber++;
 		  if (sequenceNumber == USHRT_MAX) sequenceNumber = 0;    // refer to getAck()
 

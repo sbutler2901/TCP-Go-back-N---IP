@@ -14,7 +14,7 @@
 #include <time.h>
 
 #define MAX_NUM_CONNECTIONS 1
-#define BUFFER_SIZE 256
+#define BUFFER_SIZE 500
 #define ACK_DGRAM_SIZE 8
 
 uint32_t sequenceNumberExpected = 0;    // the USHRT_MAX for this variable is used to signify a failed ACK on the client side
