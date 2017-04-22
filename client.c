@@ -472,29 +472,31 @@ int main(int argc, char *argv[])
       } 
     }
     if(currentWin > 0 && noMoreData == 0) {
-      // START - Send packet
       numRead = readFile(fileBuffer, maxSegSize);
+      
       if(numRead <= 0) noMoreData = 1;
+      else {
+        // START - Send packet
+        addData(sndDatagram, fileBuffer, maxSegSize);
+        makeHeader(sndDatagram, maxSegSize);
 
-      addData(sndDatagram, fileBuffer, maxSegSize);
-      makeHeader(sndDatagram, maxSegSize);
+        // START - Save packet
+        savePacket(sndDatagram, goBackDgrams, goBackDgramPtr, maxSegSize);
+        goBackDgramPtr++;
+        if(goBackDgramPtr == winSize) goBackDgramPtr = 0;
+        // END - save packet
 
-      // START - Save packet
-      savePacket(sndDatagram, goBackDgrams, goBackDgramPtr, maxSegSize);
-      goBackDgramPtr++;
-      if(goBackDgramPtr == winSize) goBackDgramPtr = 0;
-      // END - save packet
+        sendSize = sendDatagram(&sockfd, &server_addr, sndDatagram, numRead+8);  
+        clearBuffers(sndDatagram, fileBuffer, maxSegSize);
+        // END - send packet
 
-      sendSize = sendDatagram(&sockfd, &server_addr, sndDatagram, numRead+8);  
-      clearBuffers(sndDatagram, fileBuffer, maxSegSize);
-      // END - send packet
+        lastSeqSent = sequenceNumber;
+        sequenceNumber++;
+        if (sequenceNumber == USHRT_MAX) sequenceNumber = 0;    // refer to getAck()
 
-      lastSeqSent = sequenceNumber;
-      sequenceNumber++;
-		  if (sequenceNumber == USHRT_MAX) sequenceNumber = 0;    // refer to getAck()
-
-      currentWin--;
-      if(timer.tv_sec == -1) startTimer(&timer);  // First loop: timer has never been started
+        currentWin--;
+        if(timer.tv_sec == -1) startTimer(&timer);  // First loop: timer has never been started
+      }
     }
   }
   //** End file sending **/
