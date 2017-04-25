@@ -175,6 +175,10 @@ int verifyACK(uint32_t lastSeqACKd, uint32_t ackdSeqNum)
     printf("The received datagram was not an ACK\n\n");
     return 0;
   }
+  if(lastSeqACKd == USHRT_MAX && ackdSeqNum == 0) {
+    printf("Seq # %u has been acknowledged\n\n", ackdSeqNum);
+    return 1;
+  }
   if(lastSeqACKd > ackdSeqNum) {
     printf("lastACKd= %d, recentACK= %d\n", lastSeqACKd, ackdSeqNum);
     return 0;
@@ -328,8 +332,8 @@ void savePacket(u_char *sndDatagram, u_char **goBackDgrams, int goBackDgramPtr, 
  **/
 void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server_addr, size_t maxSegSize, int goBackDgramPtr, int sndDataSize, int winSize)
 {
-	int i, dGramLen = -1, numResent = 0;
-	size_t j;
+  int i, dGramLen = -1, numResent = 0;
+  size_t j;
   u_char *sndDatagram = (u_char*) calloc(sndDataSize, sizeof(u_char));
 
   if (sndDatagram == NULL) error("Datagram memory allocation failure\n");
@@ -346,7 +350,8 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
 
     printf("Seq resent: %d\n", seqSend);
 
-    sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
+    int resentSize = sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
+    printf("resentSize: %d\n", resentSize);
     memset(sndDatagram, 0, maxSegSize+8);
     numResent++;
     dGramLen = -1;
@@ -366,7 +371,7 @@ int main(int argc, char *argv[])
   struct hostent *server;                     // Hostent struct that keeps relevant host info. Such as official name and address family.
   char *host_name, *file_name;                // The host name and file name retrieve from command line
   u_char **goBackDgrams;
-  uint32_t lastSeqACKd = 0, acksSeq, lastSeqSent=-1;
+  uint32_t lastSeqACKd = USHRT_MAX, acksSeq, lastSeqSent=-1;
 
   // START select() - Used by select() to poll if there are ACKs to be read
   fd_set rset;              // File descriptors that might be ready to read
@@ -454,6 +459,7 @@ int main(int argc, char *argv[])
 
   while(1) {
     if(noMoreData && lastSeqACKd == lastSeqSent) {
+      printf("lastSeqACKd = %d\n", lastSeqACKd);
       printf("There is no more data to send\n");
       break;
     }
@@ -487,6 +493,9 @@ int main(int argc, char *argv[])
         // END - save packet
 
         sendSize = sendDatagram(&sockfd, &server_addr, sndDatagram, numRead+8);  
+
+        printf("numRead: %lu, sendSize: %lu\n", numRead, sendSize);
+
         clearBuffers(sndDatagram, fileBuffer, maxSegSize);
         // END - send packet
 

@@ -289,7 +289,7 @@ int main(int argc, char *argv[])
     // to handle communication between the server and the client. 
     recsize = recvfrom(sockfd, (void*)recvdDatagram, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, &clientLen);
     if (recsize < 0) error("ERROR on recvfrom");
-    //printf("receivesize: %d\n", recsize);
+    printf("receivesize: %d\n", recsize);
 
     //Retrieve header
     seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
@@ -303,13 +303,16 @@ int main(int argc, char *argv[])
     }
 
     if(!wasDropped(drop_prob)) {
-	    if ( verifyChksum(recvdDatagram, chkRecvd, recsize) && verifySequence(seqRecvd) ) {
-	    	sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);      
-	      fwrite(&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
-	      printf("\n\n");
-	    } else {
-	    	printf("Seq: %d was dropped\n\n", seqRecvd);
-	    }
+      if ( verifyChksum(recvdDatagram, chkRecvd, recsize) && verifySequence(seqRecvd) ) {
+  	sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);      
+        fwrite(&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
+        printDGram(recvdDatagram, recsize, 0);
+        printf("\n\n");
+      } else {
+        printf("The checksum or sequence was not as expected\n");
+      }
+    } else {
+      printf("Seq: %d was dropped\n\n", seqRecvd);
     }
 
     clearBuffers(recvdDatagram, ackDatagram);
