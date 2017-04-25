@@ -11,9 +11,10 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <limits.h>
+#include <time.h>
 
 #define MAX_NUM_CONNECTIONS 1
-#define BUFFER_SIZE 256
+#define BUFFER_SIZE 500
 #define ACK_DGRAM_SIZE 8
 
 uint32_t sequenceNumberExpected = 0;    // the USHRT_MAX for this variable is used to signify a failed ACK on the client side
@@ -24,7 +25,10 @@ const uint16_t closeFlag = 0b1111111111111111;
 
 FILE *fileToWrite;
 
-// Prints the error message passed. 
+/**
+ * error - prints the value of errno & exit
+ * @msg: The specific message to preceed the error
+ **/
 void error(const char *msg)
 {
   perror(msg);
@@ -40,9 +44,9 @@ void error(const char *msg)
  **/
 void printDGram(u_char *dGram, int dGramLen, uint8_t withIndicies)
 {
-  // Prints the header
   for (int i=0; i < dGramLen + 8; i++) {
     if (i < 8) {
+			// Header
       printf("dGram[%d]: %u\n", i, (unsigned int)dGram[i]);      
     } else {
     	if(withIndicies > 0) printf("dGram[%d]: %c\n", i, (char)dGram[i]);
@@ -51,6 +55,11 @@ void printDGram(u_char *dGram, int dGramLen, uint8_t withIndicies)
   }
 }
 
+/**
+ * clearBuffers - Clears the datagram buffers
+ * recvdDatagram: The buffer for receiving datagrams
+ * ackDatagram: The buffer for sending ACK datagrams
+ **/
 void clearBuffers(u_char *recvdDatagram, u_char *ackDatagram) 
 {
   memset(recvdDatagram, 0, BUFFER_SIZE);    
@@ -127,18 +136,19 @@ void makeHeader(u_char *ackDatagram, uint32_t seqNum)
  **/
 void sendAck(int *sockfd, struct sockaddr_in *server_addr, u_char *ackDatagram, uint32_t seqNum)
 {
+	int sendSize;
+
   printf("Sending Ack for sequence # %d: ", seqNum);
 
   makeHeader(ackDatagram, seqNum);
 
-  int sendSize = sendto(*sockfd, ackDatagram, ACK_DGRAM_SIZE, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
+  sendSize = sendto(*sockfd, ackDatagram, ACK_DGRAM_SIZE, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   
   if(sendSize < 0) {
     error("Error sending the packet:");
   } else {
-    printf("sendSize: %d\n\n", sendSize);
+    //printf("sendSize: %d\n\n", sendSize);
   }
-  //memset(ackDatagram, 0, BUFFER_SIZE);
 }
 
 /**
@@ -148,13 +158,13 @@ void sendAck(int *sockfd, struct sockaddr_in *server_addr, u_char *ackDatagram, 
 int verifySequence(uint32_t seqRecvd)
 {
   if ( seqRecvd == sequenceNumberExpected) {
-    printf("The sequence # was as expected\n");
+    printf("The sequence # was as expected: %d\n", seqRecvd);
     sequenceNumberExpected++; 
     if (sequenceNumberExpected == USHRT_MAX) sequenceNumberExpected = 0;    // refer to global variable declaration
 
     return 1;
   } else {
-    printf("The sequence # was not as expected\n");
+    printf("The sequence # was not as expected: recvd=%d, expect=%d\n", seqRecvd, sequenceNumberExpected);
     return 0;    
   }
 }
@@ -166,7 +176,7 @@ int verifySequence(uint32_t seqRecvd)
  *
  * Return: (int)bool - if the checksums matched
  **/
-int verifyChksum(u_char *recvdDatagram, uint16_t chkRecvd)
+int verifyChksum(u_char *recvdDatagram, uint16_t chkRecvd, int dGramSize)
 {
   uint32_t sum = 0;
   uint16_t calcdChk = 0;
@@ -175,41 +185,66 @@ int verifyChksum(u_char *recvdDatagram, uint16_t chkRecvd)
   recvdDatagram[4] = pseudoChksum >> 8;
   recvdDatagram[5] = pseudoChksum;
 
-  calcdChk = calcChecksum(recvdDatagram, BUFFER_SIZE, sum);
-  printf("Calc'd Chk: %u\n", (unsigned int)calcdChk);
+  calcdChk = calcChecksum(recvdDatagram, dGramSize, sum);
+  //printf("Calc'd Chk: %u\n", (unsigned int)calcdChk);
 
   if (calcdChk == chkRecvd) {
-    printf("The checksums matched\n");
+    //printf("The checksums matched\n");
     return 1;
   } else {
     printf("The checksums did not matched\n");    
     return 0;
   }
-}    
+}   
+
+/**
+ * randZeroToOne - returns a random number between 0 - 1
+ *
+ * Note: rand() must be seeded prior to calls using srand()
+ *
+ * Return: double - the random number generated
+ **/
+double randZeroToOne() {
+  return rand() / (RAND_MAX + 1.);
+}
+
+/**
+ * wasDropped - gets a random number and if it is <= the drop prob it indicates a drop 
+ * 	by returning true
+ * @drop_prob: the artificial probablity that a packet is dropped
+ *
+ * Return: int - 1 if the packet should be dropped, 0 otherwise
+ **/
+int wasDropped(double drop_prob) {
+	double randGend = randZeroToOne();
+	printf("randGend: %f, drop_prob: %f\n", randGend, drop_prob);
+	if(randGend <= drop_prob) return 1;
+	return 0;	
+} 
 
 int main(int argc, char *argv[])
 {
-  int sockfd, portno;                         // The socket file descriptor & port number
+  int sockfd, portno, recsize;                // The socket file descriptor, port number, and size of rcvdDatagram
   double drop_prob;                           // Probablity a packet is dropped
-  
   char *file_name;                            // The file to write to and the buffer to store the datagram
-  //u_char buffer[BUFFER_SIZE] = {0};           // Buffer for ACKs
   u_char recvdDatagram[BUFFER_SIZE] = {0};    // Buffer for receiving datagram
-  u_char ackDatagram[ACK_DGRAM_SIZE] = {0};
-
+  u_char ackDatagram[ACK_DGRAM_SIZE] = {0};		// Buffer for ACKs
   socklen_t clientLen;                        // Stores the size of the clients sockaddr_in 
-  int recsize;                            // Stores size of received datagram
-
   struct sockaddr_in server_addr;             // Sockadder_in structs that store IP address, port, and etc for the server and its client. 
+	uint32_t seqRecvd, chkRecvd, flagRecvd;			// Stores the sequence #, checksum, and flag from the received datagram
 
   if (argc < 4) {
     fprintf(stderr,"usage: %s port# file-name probablity\n", argv[0]);
     exit(1);
   }
 
+	//*** Init - Begin ***  
+
   portno = atoi(argv[1]);
   file_name = argv[2];
   drop_prob = atof(argv[3]);
+
+	srand(time(NULL));		// Sends the RNG
 
   // Sets all variables in the serv_addr struct to 0 to prevent "junk" 
   // in the variables. "Always pass structures by reference w/ the 
@@ -238,29 +273,28 @@ int main(int argc, char *argv[])
   // process. 
   if ( bind(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0 ) {
     close(sockfd);
-    error("ERROR on binding");
+    error("ERROR on binding the socket");
   } 
 
   fileToWrite = fopen(argv[2], "w");
+  if(fileToWrite == NULL) error("Error opening the file\n");
 
-  if(fileToWrite == NULL) {
-    error("Error opening the file\n");
-  }
+  //*** Init - End ***
+
+  //*** The client processes are ready to begin ***
 
   while (1)
   {
     // Accepts a connection from the client and creates a new socket descriptor
     // to handle communication between the server and the client. 
     recsize = recvfrom(sockfd, (void*)recvdDatagram, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, &clientLen);
-    if (recsize < 0) {
-      error("ERROR on recvfrom");
-    }
+    if (recsize < 0) error("ERROR on recvfrom");
     printf("receivesize: %d\n", recsize);
 
     //Retrieve header
-    uint32_t seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
-    uint16_t chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
-    uint16_t flagRecvd = (recvdDatagram[6] << 8) | recvdDatagram[7];
+    seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
+    chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
+    flagRecvd = (recvdDatagram[6] << 8) | recvdDatagram[7];
     printf("Seq: %u, Chk: %u, Flag: %u\n", seqRecvd, chkRecvd, flagRecvd);
 
     if (flagRecvd == closeFlag) {
@@ -268,16 +302,17 @@ int main(int argc, char *argv[])
       break;
     }
 
-    if ( verifyChksum(recvdDatagram, chkRecvd) && verifySequence(seqRecvd) ) {
-      sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);
-      fwrite (&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
-      // printf("Start Datagram data: \n");
-      //printDGram(recvdDatagram, 100, 0);
-      // printf("End Datagram data\n");
-
-    } else { 
-      //printDGram(&recvdDatagram[8], recsize-8);
-      break;
+    if(!wasDropped(drop_prob)) {
+      if ( verifyChksum(recvdDatagram, chkRecvd, recsize) && verifySequence(seqRecvd) ) {
+  	sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);      
+        fwrite(&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
+        //printDGram(recvdDatagram, recsize, 0);
+        printf("\n\n");
+      } else {
+        printf("The checksum or sequence was not as expected\n");
+      }
+    } else {
+      printf("Seq: %d was dropped\n\n", seqRecvd);
     }
 
     clearBuffers(recvdDatagram, ackDatagram);
@@ -285,5 +320,5 @@ int main(int argc, char *argv[])
 
   close(sockfd);
   fclose(fileToWrite);  
-  return 0; 
+  exit(0); 
 }
