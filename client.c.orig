@@ -14,7 +14,7 @@
 #include <limits.h>
 #include <sys/time.h>
 
-#undef DEBUG
+#define DEBUG
 
 // Represents the max the MSS can be - (The server would require larger buffers or handle fragmentation
 #define BUFFER_SIZE 500
@@ -180,11 +180,7 @@ int verifyACK(uint32_t lastSeqACKd, uint32_t ackdSeqNum)
     return 0;
   }
   if(lastSeqACKd == USHRT_MAX && ackdSeqNum == 0) {
-
-#ifdef DEBUG
     printf("Seq # %u has been acknowledged\n\n", ackdSeqNum);
-#endif
-
     return 1;
   }
   if(lastSeqACKd > ackdSeqNum) {
@@ -221,10 +217,14 @@ uint32_t getAck(int *sockfd, struct sockaddr_in *server_addr, socklen_t *clientL
 
   recsize = recvfrom(*sockfd, (void*)recvdDatagram, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, clientLen);
   if (recsize < 0) error("ERROR on recvfrom");
+<<<<<<< Updated upstream
+  //printf("receivesize: %d\n", recsize);
+=======
 
 #ifdef DEBUG
   printf("receivesize: %d\n", recsize);
 #endif
+>>>>>>> Stashed changes
 
   seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
   chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
@@ -235,11 +235,7 @@ uint32_t getAck(int *sockfd, struct sockaddr_in *server_addr, socklen_t *clientL
 #endif
 
   if (flagRecvd == ackFlag) {
-
-#ifdef DEBUG
     printf("The ACK for seq # %d was received\n", seqRecvd);
-#endif
-
     return seqRecvd;
   }
   return USHRT_MAX;
@@ -361,9 +357,12 @@ void savePacket(u_char *sndDatagram, u_char **goBackDgrams, int goBackDgramPtr, 
 void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server_addr, size_t maxSegSize, 
     int goBackDgramPtr, int sndDataSize, int winSize, int totalNumDgramsSent)
 {
-  int i, dGramLen = -1, numResent = 0, numToResend = 0, resentSize;
+<<<<<<< Updated upstream
+  int i, dGramLen = -1, numResent = 0, numToResend = 0;
+=======
+  int i, dGramLen = -1, numResent = 0, seqResent;
+>>>>>>> Stashed changes
   size_t j;
-  uint32_t seqResent;
   u_char *sndDatagram = (u_char*) calloc(sndDataSize, sizeof(u_char));
 
   if(sndDatagram == NULL) error("Datagram memory allocation failure\n");
@@ -378,14 +377,18 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
     }
     if(dGramLen == -1) dGramLen = maxSegSize+8;
 
+<<<<<<< Updated upstream
+    uint32_t seqResent = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
+
+    int resentSize = sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
+    printf("Seq resent: %u, resentSize: %d\n", seqResent, resentSize);
+=======
     seqResent = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
 
-    resentSize = sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
-    printf("Timeout, sequence number = %u\n", seqResent);
-
 #ifdef DEBUG
-    printf("resentSize: %d\n", resentSize);
+    printf("Seq resent: %d\n", seqResent);
 #endif
+>>>>>>> Stashed changes
 
     memset(sndDatagram, 0, maxSegSize+8);
     numResent++;
@@ -396,8 +399,13 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
 
 int main(int argc, char *argv[])
 {
+<<<<<<< Updated upstream
 	// The socket file descriptor, port number, and the number of chars read/written
   int sockfd, portno, winSize, currentWin, sndDataSize, fileBufferSize, goBackDgramPtr = 0, noMoreData = 0, totalNumDgramsSent = 0;
+=======
+  // The socket file descriptor, port number, and the number of chars read/written
+  int sockfd, portno, winSize, currentWin, sndDataSize, fileBufferSize, goBackDgramPtr = 0, noMoreData = 0;
+>>>>>>> Stashed changes
   size_t maxSegSize, sendSize, numRead = 0;
   u_char *sndDatagram;      // The buffer storing each datagram before it is sent
   char *fileBuffer;         // Buffer storing the file data for each datagram
@@ -502,8 +510,16 @@ int main(int argc, char *argv[])
       break;
     }
     if(hasTimerExpired(&timer)) {
-      //printf("Timer expired\n");
+
+#ifdef DEBUG
+      printf("Timer expired\n");
+<<<<<<< Updated upstream
       resendDgrams(goBackDgrams, &sockfd, &server_addr, maxSegSize, goBackDgramPtr, sndDataSize, winSize, totalNumDgramsSent);
+=======
+#endif
+
+      resendDgrams(goBackDgrams, &sockfd, &server_addr, maxSegSize, goBackDgramPtr, sndDataSize, winSize);
+>>>>>>> Stashed changes
       startTimer(&timer);
     }
     while(areThereACKs(maxfd, &allset, &rset, &timeout)) {
@@ -532,9 +548,7 @@ int main(int argc, char *argv[])
 
         sendSize = sendDatagram(&sockfd, &server_addr, sndDatagram, numRead+8);  
 
-#ifdef DEBUG
         printf("numRead: %lu, sendSize: %lu\n", numRead, sendSize);
-#endif
 
         clearBuffers(sndDatagram, fileBuffer, maxSegSize);
         // END - send packet
