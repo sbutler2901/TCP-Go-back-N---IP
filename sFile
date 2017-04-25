@@ -1,0 +1,6 @@
+  //memcpy(&sndDatagram[8], "Dog", 3);  // Add data
+  // addData("Dog", 3);
+  // makeHeader();
+  // sendDatagram(&sockfd, &server_addr);
+  // verifyAck( getAck(&sockfd, &server_addr, &clientLen) );
+test100011

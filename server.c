@@ -306,7 +306,7 @@ int main(int argc, char *argv[])
       if ( verifyChksum(recvdDatagram, chkRecvd, recsize) && verifySequence(seqRecvd) ) {
   	sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);      
         fwrite(&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
-        printDGram(recvdDatagram, recsize, 0);
+        //printDGram(recvdDatagram, recsize, 0);
         printf("\n\n");
       } else {
         printf("The checksum or sequence was not as expected\n");

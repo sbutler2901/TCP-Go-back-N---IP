@@ -205,7 +205,7 @@ uint32_t getAck(int *sockfd, struct sockaddr_in *server_addr, socklen_t *clientL
 
   recsize = recvfrom(*sockfd, (void*)recvdDatagram, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, clientLen);
   if (recsize < 0) error("ERROR on recvfrom");
-  printf("receivesize: %d\n", recsize);
+  //printf("receivesize: %d\n", recsize);
 
   seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
   chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
@@ -329,29 +329,32 @@ void savePacket(u_char *sndDatagram, u_char **goBackDgrams, int goBackDgramPtr, 
  * @goBackDgraPtr - the next buffer to be replaced (The earliest saved buffer that hasn't been ACKd)
  * @sndDatasize - the size of a send datagram buffer
  * @winSize - the number of buffers saved before being replaced
+ * @totalNumDgramsSent - the total number of original datagrams that have been sent
  **/
-void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server_addr, size_t maxSegSize, int goBackDgramPtr, int sndDataSize, int winSize)
+void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server_addr, size_t maxSegSize, 
+    int goBackDgramPtr, int sndDataSize, int winSize, int totalNumDgramsSent)
 {
-  int i, dGramLen = -1, numResent = 0;
+  int i, dGramLen = -1, numResent = 0, numToResend = 0;
   size_t j;
   u_char *sndDatagram = (u_char*) calloc(sndDataSize, sizeof(u_char));
 
-  if (sndDatagram == NULL) error("Datagram memory allocation failure\n");
+  if(sndDatagram == NULL) error("Datagram memory allocation failure\n");
+  if(totalNumDgramsSent < winSize) numToResend = totalNumDgramsSent;
+  else numToResend = winSize;
 
-  for(i = goBackDgramPtr; numResent < winSize; i++) {
-    if(i >= winSize) i = 0;
+  for(i = goBackDgramPtr; numResent < numToResend; i++) {
+    if(i >= numToResend) i = 0;
     for(j = 0; j<maxSegSize+8; j++) {
       sndDatagram[j] = goBackDgrams[i][j];
       if(dGramLen == -1 && j>=8 && sndDatagram[j] == 0) dGramLen = j;
     }
     if(dGramLen == -1) dGramLen = maxSegSize+8;
 
-    int seqSend = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
-
-    printf("Seq resent: %d\n", seqSend);
+    uint32_t seqResent = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
 
     int resentSize = sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
-    printf("resentSize: %d\n", resentSize);
+    printf("Seq resent: %u, resentSize: %d\n", seqResent, resentSize);
+
     memset(sndDatagram, 0, maxSegSize+8);
     numResent++;
     dGramLen = -1;
@@ -362,7 +365,7 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
 int main(int argc, char *argv[])
 {
 	// The socket file descriptor, port number, and the number of chars read/written
-  int sockfd, portno, winSize, currentWin, sndDataSize, fileBufferSize, goBackDgramPtr = 0, noMoreData = 0;
+  int sockfd, portno, winSize, currentWin, sndDataSize, fileBufferSize, goBackDgramPtr = 0, noMoreData = 0, totalNumDgramsSent = 0;
   size_t maxSegSize, sendSize, numRead = 0;
   u_char *sndDatagram;      // The buffer storing each datagram before it is sent
   char *fileBuffer;         // Buffer storing the file data for each datagram
@@ -459,13 +462,12 @@ int main(int argc, char *argv[])
 
   while(1) {
     if(noMoreData && lastSeqACKd == lastSeqSent) {
-      printf("lastSeqACKd = %d\n", lastSeqACKd);
       printf("There is no more data to send\n");
       break;
     }
     if(hasTimerExpired(&timer)) {
       printf("Timer expired\n");
-      resendDgrams(goBackDgrams, &sockfd, &server_addr, maxSegSize, goBackDgramPtr, sndDataSize, winSize);
+      resendDgrams(goBackDgrams, &sockfd, &server_addr, maxSegSize, goBackDgramPtr, sndDataSize, winSize, totalNumDgramsSent);
       startTimer(&timer);
     }
     while(areThereACKs(maxfd, &allset, &rset, &timeout)) {
@@ -502,7 +504,8 @@ int main(int argc, char *argv[])
         lastSeqSent = sequenceNumber;
         sequenceNumber++;
         if (sequenceNumber == USHRT_MAX) sequenceNumber = 0;    // refer to getAck()
-
+        
+        totalNumDgramsSent++;
         currentWin--;
         if(timer.tv_sec == -1) startTimer(&timer);  // First loop: timer has never been started
       }
