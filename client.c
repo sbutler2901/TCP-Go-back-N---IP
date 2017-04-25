@@ -14,6 +14,8 @@
 #include <limits.h>
 #include <sys/time.h>
 
+#undef DEBUG
+
 // Represents the max the MSS can be - (The server would require larger buffers or handle fragmentation
 #define BUFFER_SIZE 500
 #define TIMEOUT 6.0		// The retranmission timer's timeout
@@ -97,7 +99,7 @@ uint16_t calcChecksum(u_char *sndDatagram, unsigned nbytes, uint32_t sum)
  **/
 void addData(u_char *sndDatagram, char *fileBuffer, size_t maxSegSize)
 {
-	memcpy(&sndDatagram[8], fileBuffer, maxSegSize);
+  memcpy(&sndDatagram[8], fileBuffer, maxSegSize);
 }
 
 /**
@@ -107,7 +109,7 @@ void addData(u_char *sndDatagram, char *fileBuffer, size_t maxSegSize)
  **/
 void addNewChksum(u_char *sndDatagram, uint16_t calcdChk)
 {
-	sndDatagram[4] = calcdChk >> 8;
+  sndDatagram[4] = calcdChk >> 8;
   sndDatagram[5] = calcdChk;
 }
 
@@ -121,9 +123,8 @@ void addNewChksum(u_char *sndDatagram, uint16_t calcdChk)
  **/
 void makeHeader(u_char *sndDatagram, int dGramLen)
 {
-  uint32_t sum=0, seqSend=0;
-  uint16_t calcdChk=0, chkSend=0, dataSend=0;
-
+  uint32_t sum=0;
+  uint16_t calcdChk=0;
   sndDatagram[0] = sequenceNumber >> 24;
   sndDatagram[1] = sequenceNumber >> 16;
   sndDatagram[2] = sequenceNumber >> 8;
@@ -137,12 +138,13 @@ void makeHeader(u_char *sndDatagram, int dGramLen)
 
   addNewChksum(sndDatagram, calcdChk);  
 
+#ifdef DEBUG
   // For testing purposes
-  seqSend = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
-  chkSend = (sndDatagram[4] << 8) | sndDatagram[5];
-  dataSend = (sndDatagram[6] << 8) | sndDatagram[7];
-
+  uint32_t seqSend = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
+  uint16_t chkSend = (sndDatagram[4] << 8) | sndDatagram[5];
+  uint16_t dataSend = (sndDatagram[6] << 8) | sndDatagram[7];
   printf("Datagram Seq: %u, Chk: %u, Flag: %u\n", seqSend, chkSend, dataSend);
+#endif
 }
 
 /**
@@ -156,8 +158,6 @@ int sendDatagram(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagr
 
   int sendSize = sendto(*sockfd, sndDatagram, datagramLen, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   if(sendSize < 0) error("Error sending the packet:");
-  
-  //printf("sendSize: %d\n", sendSize);
   return sendSize;
 }
 
@@ -172,18 +172,34 @@ int sendDatagram(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagr
 int verifyACK(uint32_t lastSeqACKd, uint32_t ackdSeqNum)
 {
   if (ackdSeqNum == USHRT_MAX) { 
+
+#ifdef DEBUG
     printf("The received datagram was not an ACK\n\n");
+#endif
+
     return 0;
   }
   if(lastSeqACKd == USHRT_MAX && ackdSeqNum == 0) {
+
+#ifdef DEBUG
     printf("Seq # %u has been acknowledged\n\n", ackdSeqNum);
+#endif
+
     return 1;
   }
   if(lastSeqACKd > ackdSeqNum) {
+
+#ifdef DEBUG
     printf("lastACKd= %d, recentACK= %d\n", lastSeqACKd, ackdSeqNum);
+#endif
+
     return 0;
   }
+
+#ifdef DEBUG
   printf("Seq # %u has been acknowledged\n\n", ackdSeqNum);
+#endif
+
   return 1;
 }
 
@@ -205,15 +221,25 @@ uint32_t getAck(int *sockfd, struct sockaddr_in *server_addr, socklen_t *clientL
 
   recsize = recvfrom(*sockfd, (void*)recvdDatagram, BUFFER_SIZE, 0, (struct sockaddr*)&server_addr, clientLen);
   if (recsize < 0) error("ERROR on recvfrom");
-  //printf("receivesize: %d\n", recsize);
+
+#ifdef DEBUG
+  printf("receivesize: %d\n", recsize);
+#endif
 
   seqRecvd = (recvdDatagram[0] <<  24) | (recvdDatagram[1] << 16) | (recvdDatagram[2] << 8) | recvdDatagram[3];
   chkRecvd = (recvdDatagram[4] << 8) | recvdDatagram[5];
   flagRecvd = (recvdDatagram[6] << 8) | recvdDatagram[7];
+
+#ifdef DEBUG
   printf("Ack's Seq: %u, Chk: %u, Flag: %u\n", seqRecvd, chkRecvd, flagRecvd); 
+#endif
 
   if (flagRecvd == ackFlag) {
+
+#ifdef DEBUG
     printf("The ACK for seq # %d was received\n", seqRecvd);
+#endif
+
     return seqRecvd;
   }
   return USHRT_MAX;
@@ -223,6 +249,7 @@ uint32_t getAck(int *sockfd, struct sockaddr_in *server_addr, socklen_t *clientL
  * clearBuffers - clears the buffers being used for each round of datagra / ACK interations
  * @sndDatagram: The datagram buffer to be nulled
  * @fileBuffer: The buffer storing the file's lines to be nulled
+ * @maxSegSize: the maximum size of the buffers
  **/
 void clearBuffers(u_char *sndDatagram, char *fileBuffer, size_t maxSegSize)
 {
@@ -298,7 +325,7 @@ int hasTimerExpired(struct timeval *timer)
  **/
 int areThereACKs(int maxfd, fd_set *allset, fd_set *rset, struct timeval *timeout)
 {
-	int nready;
+  int nready;
 
   *rset = *allset;    // needs to be reset each time
   nready = select( maxfd, rset, NULL, NULL,  timeout);
@@ -334,8 +361,9 @@ void savePacket(u_char *sndDatagram, u_char **goBackDgrams, int goBackDgramPtr, 
 void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server_addr, size_t maxSegSize, 
     int goBackDgramPtr, int sndDataSize, int winSize, int totalNumDgramsSent)
 {
-  int i, dGramLen = -1, numResent = 0, numToResend = 0;
+  int i, dGramLen = -1, numResent = 0, numToResend = 0, resentSize;
   size_t j;
+  uint32_t seqResent;
   u_char *sndDatagram = (u_char*) calloc(sndDataSize, sizeof(u_char));
 
   if(sndDatagram == NULL) error("Datagram memory allocation failure\n");
@@ -350,10 +378,14 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
     }
     if(dGramLen == -1) dGramLen = maxSegSize+8;
 
-    uint32_t seqResent = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
+    seqResent = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
 
-    int resentSize = sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
-    printf("Seq resent: %u, resentSize: %d\n", seqResent, resentSize);
+    resentSize = sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
+    printf("Timeout, sequence number = %u\n", seqResent);
+
+#ifdef DEBUG
+    printf("resentSize: %d\n", resentSize);
+#endif
 
     memset(sndDatagram, 0, maxSegSize+8);
     numResent++;
@@ -462,11 +494,15 @@ int main(int argc, char *argv[])
 
   while(1) {
     if(noMoreData && lastSeqACKd == lastSeqSent) {
+
+#ifdef DEBUG
       printf("There is no more data to send\n");
+#endif
+
       break;
     }
     if(hasTimerExpired(&timer)) {
-      printf("Timer expired\n");
+      //printf("Timer expired\n");
       resendDgrams(goBackDgrams, &sockfd, &server_addr, maxSegSize, goBackDgramPtr, sndDataSize, winSize, totalNumDgramsSent);
       startTimer(&timer);
     }
@@ -496,7 +532,9 @@ int main(int argc, char *argv[])
 
         sendSize = sendDatagram(&sockfd, &server_addr, sndDatagram, numRead+8);  
 
+#ifdef DEBUG
         printf("numRead: %lu, sendSize: %lu\n", numRead, sendSize);
+#endif
 
         clearBuffers(sndDatagram, fileBuffer, maxSegSize);
         // END - send packet
