@@ -17,7 +17,7 @@
 #undef DEBUG
 
 // Represents the max the MSS can be - (The server would require larger buffers or handle fragmentation
-#define BUFFER_SIZE 500
+#define BUFFER_SIZE 1024
 #define TIMEOUT 6.0		// The retranmission timer's timeout
 
 const uint16_t pseudoChksum = 0b0000000000000000;
@@ -153,10 +153,10 @@ void makeHeader(u_char *sndDatagram, int dGramLen)
  * @sockfd: The file descriptor for the socket
  * @server_addr: Contains the info for the server
  **/
-int sendDatagram(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagram, int datagramLen)
+ssize_t sendDatagram(int *sockfd, struct sockaddr_in *server_addr, u_char *sndDatagram, int datagramLen)
 {
 
-  int sendSize = sendto(*sockfd, sndDatagram, datagramLen, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
+  ssize_t sendSize = sendto(*sockfd, (void*)sndDatagram, datagramLen, 0, (struct sockaddr*) server_addr, sizeof(*server_addr));
   if(sendSize < 0) error("Error sending the packet:");
   return sendSize;
 }
@@ -361,7 +361,8 @@ void savePacket(u_char *sndDatagram, u_char **goBackDgrams, int goBackDgramPtr, 
 void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server_addr, size_t maxSegSize, 
     int goBackDgramPtr, int sndDataSize, int winSize, int totalNumDgramsSent)
 {
-  int i, dGramLen = -1, numResent = 0, numToResend = 0, resentSize;
+  int i, dGramLen = -1, numResent = 0, numToResend = 0;
+  ssize_t resentSize;
   size_t j;
   uint32_t seqResent;
   u_char *sndDatagram = (u_char*) calloc(sndDataSize, sizeof(u_char));
@@ -380,8 +381,7 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
 
     seqResent = (sndDatagram[0] <<  24) | (sndDatagram[1] << 16) | (sndDatagram[2] << 8) | sndDatagram[3];
 
-    resentSize = sendDatagram(sockfd, server_addr, sndDatagram, dGramLen);  
-    printf("Timeout, sequence number = %u\n", seqResent);
+    resentSize = sendDatagram(sockfd, server_addr, (void*)sndDatagram, dGramLen);  
 
 #ifdef DEBUG
     printf("resentSize: %d\n", resentSize);
@@ -398,7 +398,8 @@ int main(int argc, char *argv[])
 {
 	// The socket file descriptor, port number, and the number of chars read/written
   int sockfd, portno, winSize, currentWin, sndDataSize, fileBufferSize, goBackDgramPtr = 0, noMoreData = 0, totalNumDgramsSent = 0;
-  size_t maxSegSize, sendSize, numRead = 0;
+  size_t maxSegSize, numRead = 0;
+  ssize_t sendSize;
   u_char *sndDatagram;      // The buffer storing each datagram before it is sent
   char *fileBuffer;         // Buffer storing the file data for each datagram
   struct sockaddr_in server_addr;             // Sockadder_in struct that stores the IP address, port, and etc of the server.
@@ -435,7 +436,7 @@ int main(int argc, char *argv[])
 
   currentWin = winSize;
 
-  if(maxSegSize > BUFFER_SIZE) maxSegSize = BUFFER_SIZE;  // Server is unaware of maxSegSize so this is a temp fix
+  if(maxSegSize >= BUFFER_SIZE) maxSegSize = BUFFER_SIZE - 8;  // Server is unaware of maxSegSize so this is a temp fix
 
   // It appears u_char & char are of size 1B
   sndDataSize = (sizeof(u_char)*maxSegSize) + 8;
