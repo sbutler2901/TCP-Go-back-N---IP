@@ -11,4 +11,4 @@ c:
 	./client localhost 9999 cFile 4 500
 
 s:
-	./server 9999 sFile 0.5
+	./server 9999 sFile 0.01

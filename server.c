@@ -16,7 +16,7 @@
 #undef DEBUG
 
 #define MAX_NUM_CONNECTIONS 1
-#define BUFFER_SIZE 500
+#define BUFFER_SIZE 1032
 #define ACK_DGRAM_SIZE 8
 
 uint32_t sequenceNumberExpected = 0;    // the USHRT_MAX for this variable is used to signify a failed ACK on the client side
@@ -190,12 +190,16 @@ int verifyChksum(u_char *recvdDatagram, uint16_t chkRecvd, int dGramSize)
   recvdDatagram[5] = pseudoChksum;
 
   calcdChk = calcChecksum(recvdDatagram, dGramSize, sum);
-  //printf("Calc'd Chk: %u\n", (unsigned int)calcdChk);
+
+#ifdef DEBUG
+  printf("Received Chk: %u, Calc'd Chk: %u\n", (unsigned int) chkRecvd, (unsigned int)calcdChk);
+#endif
 
   if (calcdChk == chkRecvd) {
     //printf("The checksums matched\n");
     return 1;
   } else {
+    printf("Received Chk: %u, Calc'd Chk: %u\n", (unsigned int) chkRecvd, (unsigned int)calcdChk);
     printf("The checksums did not matched\n");    
     return 0;
   }
@@ -232,7 +236,8 @@ int wasDropped(double drop_prob) {
 
 int main(int argc, char *argv[])
 {
-  int sockfd, portno, recsize;                // The socket file descriptor, port number, and size of rcvdDatagram
+  int sockfd, portno;                // The socket file descriptor, port number, and size of rcvdDatagram
+  ssize_t recsize;
   double drop_prob;                           // Probablity a packet is dropped
   char *file_name;                            // The file to write to and the buffer to store the datagram
   u_char recvdDatagram[BUFFER_SIZE] = {0};    // Buffer for receiving datagram
@@ -291,7 +296,7 @@ int main(int argc, char *argv[])
 
   //*** The client processes are ready to begin ***
 
-  while (1)
+  while(1)
   {
     // Accepts a connection from the client and creates a new socket descriptor
     // to handle communication between the server and the client. 
@@ -321,8 +326,6 @@ int main(int argc, char *argv[])
   	sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);      
         fwrite(&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
         //printDGram(recvdDatagram, recsize, 0);
-      } else {
-        printf("The checksum or sequence was not as expected\n");
       }
     } else {
       printf("Packet loss, sequence number = %d\n", seqRecvd);
