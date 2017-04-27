@@ -19,7 +19,7 @@
 
 // Represents the max the MSS can be - (The server would require larger buffers or handle fragmentation
 #define BUFFER_SIZE 1024
-#define TIMEOUT 6.0		// The retranmission timer's timeout
+#define TIMEOUT 2.0		// The retranmission timer's timeout
 
 const uint16_t pseudoChksum = 0b0000000000000000;
 const uint16_t ackFlag = 0b1010101010101010;

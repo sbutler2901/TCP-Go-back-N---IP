@@ -15,7 +15,6 @@
 
 #undef DEBUG
 
-#define MAX_NUM_CONNECTIONS 1
 #define BUFFER_SIZE 1032
 #define ACK_DGRAM_SIZE 8
 #define MAX_TIMES_FAIL 128
