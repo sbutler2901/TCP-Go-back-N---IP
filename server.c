@@ -332,7 +332,7 @@ int main(int argc, char *argv[])
         //printDGram(recvdDatagram, recsize, 0);
       } else {
         numTimesFailed++;
-        if (numTimesFailed >= 3) {
+        if (numTimesFailed >= 2) {
           printf("Attempting to resend ack for %d\n", lastACKseq);
           sendAck(&sockfd, &server_addr, ackDatagram, lastACKseq);
           numTimesFailed = 0;

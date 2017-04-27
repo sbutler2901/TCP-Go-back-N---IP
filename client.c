@@ -384,7 +384,7 @@ void resendDgrams(u_char **goBackDgrams, int *sockfd, struct sockaddr_in *server
 
     resentSize = sendDatagram(sockfd, server_addr, (void*)sndDatagram, dGramLen);  
 
-    printf("Timeout, sequence number = %ud\n", seqResent);
+    printf("Timeout, sequence number = %u\n", seqResent);
 
 #ifdef DEBUG
     printf("resentSize: %d\n", resentSize);
