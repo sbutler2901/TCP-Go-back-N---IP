@@ -187,7 +187,7 @@ int verifyACK(uint32_t lastSeqACKd, uint32_t ackdSeqNum)
 
     return 1;
   }
-  if(lastSeqACKd > ackdSeqNum) {
+  if(lastSeqACKd >= ackdSeqNum) {
 
 #ifdef DEBUG
     printf("lastACKd= %d, recentACK= %d\n", lastSeqACKd, ackdSeqNum);
