@@ -297,6 +297,8 @@ int main(int argc, char *argv[])
 
   //*** The client processes are ready to begin ***
 
+  int numTimesFailed = 0;
+
   while(1)
   {
     // Accepts a connection from the client and creates a new socket descriptor
@@ -329,8 +331,12 @@ int main(int argc, char *argv[])
         lastACKseq = seqRecvd;
         //printDGram(recvdDatagram, recsize, 0);
       } else {
-        printf("Attempting to resend ack for %d\n", lastACKseq);
-        sendAck(&sockfd, &server_addr, ackDatagram, lastACKseq);
+        numTimesFailed++;
+        if (numTimesFailed >= 3) {
+          printf("Attempting to resend ack for %d\n", lastACKseq);
+          sendAck(&sockfd, &server_addr, ackDatagram, lastACKseq);
+          numTimesFailed = 0;
+        }
       }
     } else {
       printf("Packet loss, sequence number = %d\n", seqRecvd);
