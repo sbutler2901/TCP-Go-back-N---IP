@@ -12,6 +12,7 @@
 #include <netinet/in.h>
 #include <netdb.h> 
 #include <limits.h>
+#include <time.h>
 #include <sys/time.h>
 
 #undef DEBUG
