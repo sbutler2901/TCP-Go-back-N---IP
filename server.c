@@ -18,6 +18,7 @@
 #define MAX_NUM_CONNECTIONS 1
 #define BUFFER_SIZE 1032
 #define ACK_DGRAM_SIZE 8
+#define MAX_TIMES_FAIL 128
 
 uint32_t sequenceNumberExpected = 0;    // the USHRT_MAX for this variable is used to signify a failed ACK on the client side
 const uint16_t pseudoChksum = 0b0000000000000000;
@@ -332,7 +333,7 @@ int main(int argc, char *argv[])
         //printDGram(recvdDatagram, recsize, 0);
       } else {
         numTimesFailed++;
-        if (numTimesFailed >= 2) {
+        if (numTimesFailed >= MAX_TIMES_FAIL) {
           printf("Attempting to resend ack for %d\n", lastACKseq);
           sendAck(&sockfd, &server_addr, ackDatagram, lastACKseq);
           numTimesFailed = 0;
