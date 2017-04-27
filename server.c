@@ -244,7 +244,8 @@ int main(int argc, char *argv[])
   u_char ackDatagram[ACK_DGRAM_SIZE] = {0};		// Buffer for ACKs
   socklen_t clientLen;                        // Stores the size of the clients sockaddr_in 
   struct sockaddr_in server_addr;             // Sockadder_in structs that store IP address, port, and etc for the server and its client. 
-	uint32_t seqRecvd, chkRecvd, flagRecvd;			// Stores the sequence #, checksum, and flag from the received datagram
+  uint32_t seqRecvd, chkRecvd, flagRecvd;			// Stores the sequence #, checksum, and flag from the received datagram
+  uint32_t lastACKseq;
 
   if (argc < 4) {
     fprintf(stderr,"usage: %s port# file-name probablity\n", argv[0]);
@@ -325,7 +326,11 @@ int main(int argc, char *argv[])
       if ( verifyChksum(recvdDatagram, chkRecvd, recsize) && verifySequence(seqRecvd) ) {
   	sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);      
         fwrite(&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
+        lastACKseq = seqRecvd;
         //printDGram(recvdDatagram, recsize, 0);
+      } else {
+        printf("Attempting to resend ack for %d\n", lastACKseq);
+        sendAck(&sockfd, &server_addr, ackDatagram, lastACKseq);
       }
     } else {
       printf("Packet loss, sequence number = %d\n", seqRecvd);
