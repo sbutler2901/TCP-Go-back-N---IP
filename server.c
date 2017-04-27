@@ -330,7 +330,7 @@ int main(int argc, char *argv[])
   	sendAck(&sockfd, &server_addr, ackDatagram, seqRecvd);      
         fwrite(&recvdDatagram[8] , sizeof(char), recsize-8, fileToWrite);
         lastACKseq = seqRecvd;
-        //printDGram(recvdDatagram, recsize, 0);
+        numTimesFailed = 0;
       } else {
         numTimesFailed++;
         if (numTimesFailed >= MAX_TIMES_FAIL) {
