@@ -1,4 +1,7 @@
 # CSC_573_Project_2
+Seth Butler - scbutle2
+Akshit Patel - aapatel8
+
 To run this program use the the predefined commands provided in the project document.
 
 ## Compile time constants
